@@ -1,0 +1,18 @@
+.{
+    .name = .wing_app,
+    .version = "0.0.0",
+    .fingerprint = 0x61343d88cd815eab, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        // Local path during co-development; switch to a pinned url+hash once
+        // wing publishes tagged releases.
+        .wing = .{
+            .path = "../wing",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
