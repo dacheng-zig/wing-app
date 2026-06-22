@@ -22,6 +22,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("zio");
 
+    // mantle (MySQL driver) depends on the same `../zio` package as wing/talon,
+    // so Zig dedupes the module graph to a single zio instance — the runtime
+    // started in server.zig and mantle's pool share one scheduler.
+    const mantle_mod = b.dependency("mantle", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("mantle");
+
     const exe = b.addExecutable(.{
         .name = "wing_app",
         .root_module = b.createModule(.{
@@ -32,6 +40,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "wing", .module = wing_mod },
                 .{ .name = "talon", .module = talon_mod },
                 .{ .name = "zio", .module = zio_mod },
+                .{ .name = "mantle", .module = mantle_mod },
             },
         }),
     });

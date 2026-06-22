@@ -9,6 +9,11 @@
         .wing = .{
             .path = "../wing",
         },
+        // Pure-Zig MySQL driver. Local path during co-development; switch to a
+        // pinned url+hash once mantle publishes tagged releases.
+        .mantle = .{
+            .path = "../mantle",
+        },
     },
     .paths = .{
         "build.zig",

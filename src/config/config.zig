@@ -1,0 +1,72 @@
+//! Application configuration.
+//!
+//! Centralizes runtime knobs (listen address, defaults) in one place. Values
+//! come from compiled-in defaults, overridable by environment variables at
+//! startup. Loaded once in `server.run` and stored on `AppState`.
+
+const std = @import("std");
+
+/// MySQL connection settings for the mantle-backed repositories.
+///
+/// Defaults target a local dev server. The `database` must already exist (the
+/// app manages tables, not the database itself); every pooled connection
+/// selects it at handshake time. Override any field via `DB_*` env vars.
+pub const Db = struct {
+    host: []const u8 = "127.0.0.1",
+    port: u16 = 3306,
+    username: []const u8 = "root",
+    password: []const u8 = "root",
+    database: []const u8 = "wing_app",
+    /// utf8mb4_general_ci, matching mantle's default charset.
+    character_set: u8 = 45,
+    /// Hard upper bound on physical connections in the pool. Eight keeps the
+    /// connections hot and matches MySQL's most efficient point-query
+    /// concurrency on a single box; larger pools only add latency and contention
+    /// here. Raise with `DB_POOL_SIZE` if the DB lives on its own host.
+    pool_size: usize = 8,
+};
+
+pub const Config = struct {
+    host: []const u8 = "127.0.0.1",
+    port: u16 = 8080,
+    greeting: []const u8 = "Hello, world!",
+    db: Db = .{},
+    /// Number of zio executor threads. Defaults to `1` (single-threaded): with
+    /// a co-located DB the work is socket-syscall bound, so extra executors only
+    /// add cross-core contention and even slow down non-DB routes. Set
+    /// `WORKER_THREADS=N` for N executors, or `WORKER_THREADS=0` to auto-detect
+    /// the CPU count — worthwhile when the DB is remote and requests become
+    /// CPU-bound. Clamped to 1..=64.
+    worker_threads: u8 = 1,
+
+    /// Build config from defaults, overriding from the environment.
+    ///
+    /// `env` is the process environment map handed to `main` via
+    /// `std.process.Init` (the 0.16 std.Io-era way to read env vars). Reads
+    /// `PORT` plus the `DB_*` database knobs. Env strings are owned by the map
+    /// and outlive this call, so storing slices is safe.
+    pub fn load(env: *const std.process.Environ.Map) Config {
+        var cfg: Config = .{};
+        if (env.get("PORT")) |raw| {
+            if (std.fmt.parseInt(u16, raw, 10)) |p| {
+                cfg.port = p;
+            } else |_| {} // ignore malformed PORT, keep the default
+        }
+        if (env.get("DB_HOST")) |v| cfg.db.host = v;
+        if (env.get("DB_PORT")) |v| {
+            if (std.fmt.parseInt(u16, v, 10)) |p| cfg.db.port = p else |_| {}
+        }
+        if (env.get("DB_USER")) |v| cfg.db.username = v;
+        if (env.get("DB_PASSWORD")) |v| cfg.db.password = v;
+        if (env.get("DB_NAME")) |v| cfg.db.database = v;
+        if (env.get("DB_POOL_SIZE")) |v| {
+            if (std.fmt.parseInt(usize, v, 10)) |n| {
+                if (n != 0) cfg.db.pool_size = n;
+            } else |_| {}
+        }
+        if (env.get("WORKER_THREADS")) |v| {
+            if (std.fmt.parseInt(u8, v, 10)) |n| cfg.worker_threads = n else |_| {}
+        }
+        return cfg;
+    }
+};
