@@ -8,7 +8,7 @@
 const std = @import("std");
 const wing = @import("wing");
 
-const Ctx = @import("../state.zig").Ctx;
+const Ctx = @import("../../state.zig").Ctx;
 const UserService = @import("../services/user_service.zig").UserService;
 const models = @import("../models/user.zig");
 const User = models.User;
@@ -36,7 +36,7 @@ pub fn create(
     svc: *UserService,
     body: wing.Json(CreateUserReq),
 ) anyerror!wing.Created(User) {
-    const user = try svc.register(ctx.arena, body.value.name);
+    const user = try svc.register(ctx.arena, body.value);
     return .{
         .value = user,
         .location = try std.fmt.allocPrint(ctx.arena, "/api/v1/users/{d}", .{user.id}),

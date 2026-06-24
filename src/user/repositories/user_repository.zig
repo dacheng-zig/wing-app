@@ -3,7 +3,7 @@
 //! The repository is the seam between business logic and storage. It persists
 //! users in MySQL via a connection pool it **borrows** from the shared
 //! `Database` (see db/database.zig); it does not own or initialize the pool.
-//! SQL text comes from the central registry (db/sql.zig), not inline literals.
+//! The SQL it issues lives in the `sql` block below, beside its only caller.
 //!
 //! Concurrency: each call leases its own connection from the pool, so there is
 //! no shared mutable state to synchronize here — the pool caps physical
@@ -17,13 +17,38 @@
 const std = @import("std");
 const mantle = @import("mantle");
 const User = @import("../models/user.zig").User;
-const sql = @import("../db/sql.zig");
+
+const sql = struct {
+    const insert = "INSERT INTO users (name, username, password_hash) VALUES (?, ?, ?)";
+    const find_by_username = "SELECT id, password_hash FROM users WHERE username = ?";
+    const select_by_id = "SELECT id, name FROM users WHERE id = ?";
+    const select_all = "SELECT id, name FROM users ORDER BY id";
+};
+
+/// MySQL ER_DUP_ENTRY — a UNIQUE constraint (here, `users.username`) was
+/// violated. Translated to a domain error at this boundary so the MySQL-specific
+/// code never leaks into the service layer.
+const er_dup_entry = 1062;
 
 /// Row shape for SELECTs. Field order/names map to the projected columns;
 /// mantle scans binary rows into this struct.
 const UserRow = struct {
     id: u64,
     name: []const u8,
+};
+
+/// Row shape for the credential lookup (login). Carries only what auth needs:
+/// the id to bind a session to, and the stored hash to verify against.
+const CredentialRow = struct {
+    id: u64,
+    password_hash: []const u8,
+};
+
+/// A user's stored credentials, returned by `findByUsername`. `password_hash`
+/// is duplicated into the request `arena`.
+pub const Credentials = struct {
+    id: u64,
+    password_hash: []const u8,
 };
 
 pub const UserRepository = struct {
@@ -36,13 +61,48 @@ pub const UserRepository = struct {
         return .{ .gpa = gpa, .pool = pool };
     }
 
-    /// Insert a new user. The returned `name` is duplicated into `arena`.
-    pub fn create(self: *UserRepository, arena: std.mem.Allocator, name: []const u8) !User {
+    /// Insert a new user with credentials. `password_hash` is the already-hashed
+    /// PHC string (this layer never sees plaintext). The returned `name` is
+    /// duplicated into `arena`.
+    pub fn create(
+        self: *UserRepository,
+        arena: std.mem.Allocator,
+        name: []const u8,
+        username: []const u8,
+        password_hash: []const u8,
+    ) !User {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
 
-        const ok = try db.conn.exec(self.gpa, sql.users.insert, .{name});
+        const ok = db.conn.exec(self.gpa, sql.insert, .{ name, username, password_hash }) catch |err| {
+            // A duplicate username is a client error (409), not a server fault.
+            if (err == error.ServerError) {
+                if (db.conn.lastError()) |se| {
+                    if (se.code == er_dup_entry) return error.UsernameTaken;
+                }
+            }
+            return err;
+        };
         return .{ .id = ok.last_insert_id, .name = try arena.dupe(u8, name) };
+    }
+
+    /// Look up a user's credentials by username for login; `null` when no row
+    /// matches. The returned `password_hash` is duplicated into `arena`.
+    pub fn findByUsername(self: *UserRepository, arena: std.mem.Allocator, username: []const u8) !?Credentials {
+        var db = try mantle.PooledConnection.acquire(self.pool);
+        defer db.release();
+
+        var table = try db.conn.queryAllParams(
+            CredentialRow,
+            self.gpa,
+            sql.find_by_username,
+            .{username},
+        );
+        defer table.deinit();
+
+        if (table.rows.len == 0) return null;
+        const row = table.rows[0];
+        return .{ .id = row.id, .password_hash = try arena.dupe(u8, row.password_hash) };
     }
 
     /// Look up one user by id; `null` when no row matches. The returned `name`
@@ -54,7 +114,7 @@ pub const UserRepository = struct {
         var table = try db.conn.queryAllParams(
             UserRow,
             self.gpa,
-            sql.users.select_by_id,
+            sql.select_by_id,
             .{id},
         );
         defer table.deinit();
@@ -70,7 +130,7 @@ pub const UserRepository = struct {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
 
-        var table = try db.conn.queryAll(UserRow, self.gpa, sql.users.select_all);
+        var table = try db.conn.queryAll(UserRow, self.gpa, sql.select_all);
         defer table.deinit();
 
         const out = try arena.alloc(User, table.rows.len);

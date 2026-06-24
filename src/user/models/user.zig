@@ -12,6 +12,10 @@ pub const User = struct {
 };
 
 /// Request body for `POST /api/v1/users`. Bound from JSON by `wing.Json`.
+/// Registration carries credentials: the password is hashed by the service
+/// before storage (the schema requires `username`/`password_hash`).
 pub const CreateUserReq = struct {
     name: []const u8,
+    username: []const u8,
+    password: []const u8,
 };

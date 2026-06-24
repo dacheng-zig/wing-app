@@ -37,11 +37,22 @@ pub fn run(init: std.process.Init) !void {
     });
     defer rt.deinit();
 
-    var router = try routes.build(gpa);
+    const built = try routes.build(gpa);
+    var router = built.router;
     defer router.deinit();
+    // The OpenAPI spec lives for the whole app; freed on shutdown. Stored into
+    // AppState below so the `/openapi.json` handler can serve it.
+    defer gpa.free(built.openapi_spec);
 
-    var state = try AppState.init(gpa, config);
+    // `std.Io` for auth's CSPRNG, wall-clock, and argon2 entropy. These are
+    // synchronous syscalls / CPU work (no scheduler yield), so the std threaded
+    // instance is safe to call from within zio coroutines and avoids importing
+    // zio's internal io adapter. (Heavy argon2 hashing still runs on the calling
+    // executor; offloading via zio.spawnBlocking is a future optimization.)
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var state = try AppState.init(gpa, io, config);
     defer state.deinit();
+    state.api_docs.spec = built.openapi_spec;
 
     // Connect lazily but create the schema now so the first request finds the
     // table. Runs inside the runtime; a DB failure here aborts startup.

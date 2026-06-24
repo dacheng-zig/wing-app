@@ -15,13 +15,14 @@ const security_headers = @import("middleware/security_headers.zig").security_hea
 /// defaults. `error.InvalidName` (raised by UserService) becomes 400.
 fn errorStatus(err: anyerror) talon.http.Status {
     return switch (err) {
-        error.InvalidName => .bad_request,
+        error.InvalidName, error.InvalidCredentials => .bad_request,
+        error.UsernameTaken => .conflict,
         else => wing.middleware.defaultErrorStatus(err),
     };
 }
 
 pub const App = wing.App(AppState, .{
-    // wing.middleware.logger,
+    wing.middleware.logger,
     wing.middleware.recoverWith(errorStatus),
     // wing.middleware.request_id,
     // security_headers,

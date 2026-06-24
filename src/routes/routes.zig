@@ -6,34 +6,79 @@
 
 const std = @import("std");
 const wing = @import("wing");
+const openapi = @import("../openapi/root.zig");
 
 const AppState = @import("../state.zig").AppState;
 const Ctx = @import("../state.zig").Ctx;
 const home_controller = @import("../controllers/home_controller.zig");
 const health_controller = @import("../controllers/health_controller.zig");
-const user_routes = @import("user_routes.zig");
+const user_routes = @import("../user/routes/user_routes.zig");
+const auth_routes = @import("../auth/routes/auth_routes.zig");
+const docs_routes = @import("../docs/routes/docs_routes.zig");
 
 fn notFound(ctx: *Ctx) anyerror!void {
     try ctx.respond("not found\n", .{ .status = .not_found });
 }
 
-/// Build the full application router. Caller owns it and must `deinit`.
-pub fn build(gpa: std.mem.Allocator) !wing.Router(AppState) {
-    // Feature sub-router (nested under a prefix; move semantics).
+/// The built router plus the OpenAPI document generated from it.
+/// `openapi_spec` is owned by `gpa` (the server frees it); the server also
+/// stores it into `AppState.api_docs` so the `/openapi.json` handler can serve
+/// it.
+pub const Built = struct {
+    router: wing.Router(AppState),
+    openapi_spec: []const u8,
+};
+
+/// Build the full application router and assemble its OpenAPI spec. Caller owns
+/// both: `deinit` the router and `free` the spec.
+pub fn build(gpa: std.mem.Allocator) !Built {
+    // Feature sub-routers (nested under prefixes; move semantics). Unlike
+    // wing.Router, the wrapper keeps heap (docs list + path arena) after a
+    // move, so each must be deinitialized — hence `defer`, not `errdefer`.
     var users = try user_routes.build(gpa);
-    errdefer users.deinit();
+    defer users.deinit();
+
+    var auth = try auth_routes.build(gpa);
+    defer auth.deinit();
 
     // Flat ops routes (merged at the root).
-    var ops = wing.Router(AppState).init(gpa);
-    errdefer ops.deinit();
-    try ops.get("/health", health_controller.check);
+    var ops = openapi.Router(AppState).init(gpa);
+    defer ops.deinit();
+    try ops.get("/health", health_controller.check, .{ .summary = "Health check", .tags = &.{"ops"} });
 
-    var root = wing.Router(AppState).init(gpa);
-    errdefer root.deinit();
-    try root.get("/", home_controller.index);
+    // Docs feature: spec endpoint + Scalar page (hidden; root-level → merged).
+    var docs = try docs_routes.build(gpa);
+    defer docs.deinit();
+
+    var root = openapi.Router(AppState).init(gpa);
+    // The real router is moved out via `intoRouter` before return; `deinit`
+    // then frees only the wrapper's bookkeeping (docs list, path arena, and
+    // the empty inner left behind by the move).
+    defer root.deinit();
+    try root.get("/", home_controller.index, .{ .summary = "Home page", .tags = &.{"ops"} });
     try root.nest("/api/v1/users", &users);
+    try root.nest("/api/v1/auth", &auth);
     try root.merge(&ops);
-    root.fallback(notFound);
+    // Merged before assembly so the hidden-route exclusion path is exercised.
+    try root.merge(&docs);
 
-    return root;
+    const openapi_spec = try root.openApiJson(gpa, .{
+        .title = "Wing App API",
+        .version = "0.0.0",
+        .summary = "Layered HTTP API on the wing framework (Zig 0.16).",
+        .description =
+        \\Demonstrates a layered wing application: typed extractors, AppState
+        \\projection, cookie sessions + role authorization, and MySQL via mantle.
+        ,
+        .contact = .{
+            .name = "Dacheng Gao",
+            .url = "https://github.com/dacheng-zig/wing-app",
+        },
+        // No license chosen yet — add `.license = .{ .name = "MIT", .identifier
+        // = "MIT" }` (and a LICENSE file) once decided.
+    });
+    errdefer gpa.free(openapi_spec);
+
+    root.fallback(notFound);
+    return .{ .router = root.intoRouter(), .openapi_spec = openapi_spec };
 }

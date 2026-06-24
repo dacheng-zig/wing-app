@@ -1,6 +1,17 @@
 # todo
+- [x] authentication / authorization middleware and User Component (Guest / Authenticated / Authorized based on Permission or Claim)
+  - server-side sessions (argon2id, CSPRNG sid) + `Auth`/`OptionalAuth`/`RequireRole`/`Require(Policy)` extractors; login/logout/me. See `docs/auth-wing-design.md`.
+  - object-level authz (BOLA) is a documented service-layer pattern (design §5), ready to apply once a mutable-object endpoint exists.
+- [x] openapi doc
+  - defer（§8）：securitySchemes（待 auth extractor identity 反射）、错误响应 schema（待 validator RFC 9457）、多状态码/oneOf/webhooks。
+- password hash 很费 cpu，会影响并发性能
+- strong and generic ID type for global use: primary key
 - [ ] form validation / validators component
-- [ ] authentication / authorization middleware and User Component (Guest / Authenticated / Authorized based on Permission or Claim)
 - [ ] catchAll middleware: when system is under maintenance
-- [ ] db pool DX: 手动从连接池中租一个连接然后释放；lease.handle()->conn->query() IDE 无跳转；改进方向：用户直接面向 conn 操作，conn 内部自动维护 pool lease
-- [ ] user repo 为何需要维护2个 gpa：一个在 init() 中维护，另一个通过业务方法传入
+- wing-app 版本升级，用户 clone 后进行业务开发后，如何安全得获取上游更新
+- better logging: error trace and business flow logging (db 日志未捕获并记录)
+- schema 未指定 collation，应统一使用 utf8mb4 general ci or better one
+- uuid v7
+- request id: i64 -> uuid
+- rewrite PetChat in wing
+- rewrite Shiftly in wing

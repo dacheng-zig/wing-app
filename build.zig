@@ -51,4 +51,40 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| run_cmd.addArgs(args);
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    // Offline OpenAPI spec dump (no DB, no server): `zig build openapi`.
+    const openapi_gen = b.addExecutable(.{
+        .name = "openapi_gen",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/openapi_gen.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "wing", .module = wing_mod },
+                .{ .name = "talon", .module = talon_mod },
+                .{ .name = "zio", .module = zio_mod },
+                .{ .name = "mantle", .module = mantle_mod },
+            },
+        }),
+    });
+    const openapi_run = b.addRunArtifact(openapi_gen);
+    const openapi_step = b.step("openapi", "Print the assembled OpenAPI 3.1 spec to stdout");
+    openapi_step.dependOn(&openapi_run.step);
+
+    // Unit tests: the dependency-free auth units plus the openapi package
+    // (see src/tests.zig). The openapi units reflect over wing's public
+    // extractor types, so the test module imports `wing`.
+    const tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/tests.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "wing", .module = wing_mod },
+            },
+        }),
+    });
+    const run_tests = b.addRunArtifact(tests);
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_tests.step);
 }

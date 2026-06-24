@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS roles (
+  user_id BIGINT UNSIGNED NOT NULL,
+  role    VARCHAR(64) NOT NULL,
+  PRIMARY KEY (user_id, role)
+) ENGINE=InnoDB

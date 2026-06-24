@@ -1,0 +1,23 @@
+//! Unit-test aggregator.
+//!
+//! Pulls in the modules whose `test` blocks should run under `zig build test`.
+//! These are the dependency-free auth units — pure logic and extractors driven
+//! by hand-rolled fakes — so they compile and run without the HTTP stack or a
+//! live database. DB-backed paths (repositories, real session/login flow) need
+//! a MySQL instance and are covered by manual/integration checks instead.
+//!
+//! Whole-app typechecking is covered by `zig build` (it compiles the executable,
+//! including the mantle-backed layers); this target adds runtime verification of
+//! the security-critical auth logic.
+
+test {
+    _ = @import("auth/models/principal.zig");
+    _ = @import("auth/support/password.zig");
+    _ = @import("auth/support/authorizer.zig");
+    _ = @import("auth/support/extractor.zig");
+
+    // openapi package: identity/classification/schema/assembly units. These
+    // reflect over wing's public extractor types (the test module imports
+    // `wing`) but need no HTTP stack or database.
+    _ = @import("openapi/root.zig");
+}

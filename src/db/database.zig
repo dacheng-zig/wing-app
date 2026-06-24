@@ -9,7 +9,7 @@
 const std = @import("std");
 const mantle = @import("mantle");
 const Db = @import("../config/config.zig").Db;
-const sql = @import("sql.zig");
+const schema = @import("migrations.zig");
 
 pub const Database = struct {
     gpa: std.mem.Allocator,
@@ -45,7 +45,7 @@ pub const Database = struct {
     pub fn migrate(self: *Database) !void {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
-        for (sql.migrations) |stmt| {
+        for (schema.migrations) |stmt| {
             try db.conn.execSimple(self.gpa, stmt);
         }
     }
