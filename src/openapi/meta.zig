@@ -40,6 +40,26 @@ pub const License = struct {
     url: []const u8 = "",
 };
 
+/// An OpenAPI security scheme (`components.securitySchemes` entry). The app
+/// declares its one authentication mechanism here (the single source of truth
+/// for *how* this deployment authenticates); auth extractors only declare *that*
+/// they require auth (see `auth_requirement`), staying scheme-agnostic. Switching
+/// cookie→bearer is therefore a one-literal change here, not per-extractor.
+/// `kind` maps to the OpenAPI `type` field (avoids the `type` keyword).
+pub const SecurityScheme = struct {
+    /// `components.securitySchemes` key, e.g. "cookieSession".
+    name: []const u8,
+    /// OpenAPI `type`: "apiKey" | "http" | "oauth2" | "openIdConnect".
+    kind: []const u8,
+    /// apiKey location: "cookie" | "header" | "query".
+    in: []const u8 = "",
+    /// apiKey cookie/header/query parameter name, e.g. "session_id".
+    parameter_name: []const u8 = "",
+    /// http scheme: "bearer" | "basic" | ...
+    scheme: []const u8 = "",
+    description: []const u8 = "",
+};
+
 /// Top-level document identity (OpenAPI `info` object). Only `title` and
 /// `version` are required; the rest are opt-in and omitted when empty.
 pub const ApiInfo = struct {
@@ -51,12 +71,28 @@ pub const ApiInfo = struct {
     terms_of_service: []const u8 = "",
     contact: Contact = .{},
     license: License = .{},
+    /// The app's authentication scheme. Required iff any handler uses an auth
+    /// extractor (those declare `auth_requirement`); operations needing auth bind to
+    /// it at assemble time. Leaving it null while an auth op exists is a config
+    /// error (assemble fails with `error.MissingAuthScheme`).
+    auth_scheme: ?SecurityScheme = null,
 };
 
-/// Renders one operation object (`parameters`/`requestBody`/`responses`) into
-/// `components`-aware JSON. Bound to the handler type at registration; the
-/// allocator owns the returned value tree (assemble passes its arena).
-pub const BuildFn = *const fn (std.mem.Allocator, *std.json.ObjectMap) anyerror!std.json.Value;
+/// Per-build collaborators threaded into each operation's `BuildFn`:
+/// `components`/`security_schemes` collect deduped `$ref`/scheme registrations;
+/// `auth_scheme` is the app scheme an auth-requiring operation binds to.
+pub const BuildCtx = struct {
+    gpa: std.mem.Allocator,
+    components: *std.json.ObjectMap,
+    security_schemes: *std.json.ObjectMap,
+    auth_scheme: ?SecurityScheme,
+};
+
+/// Renders one operation object (`parameters`/`requestBody`/`responses`/
+/// `security`) into JSON, registering referenced schemas/security schemes into
+/// the `BuildCtx` maps (deduped across operations). Bound to the handler type at
+/// registration; the ctx allocator owns the returned value tree.
+pub const BuildFn = *const fn (*BuildCtx) anyerror!std.json.Value;
 
 /// One documented route. `path` is valid for the owning router's lifetime
 /// (either a static call-site literal or an arena-owned nested join).

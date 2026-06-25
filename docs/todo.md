@@ -1,17 +1,24 @@
 # todo
 - [x] authentication / authorization middleware and User Component (Guest / Authenticated / Authorized based on Permission or Claim)
   - server-side sessions (argon2id, CSPRNG sid) + `Auth`/`OptionalAuth`/`RequireRole`/`Require(Policy)` extractors; login/logout/me. See `docs/auth-wing-design.md`.
+  - more password hash methods: argon2id / TBA
   - object-level authz (BOLA) is a documented service-layer pattern (design §5), ready to apply once a mutable-object endpoint exists.
+  - more schemes: cookie / bearer / query / http basic
+  - more token storage: session / jwt / paseto / custom token
 - [x] openapi doc
-  - defer（§8）：securitySchemes（待 auth extractor identity 反射）、错误响应 schema（待 validator RFC 9457）、多状态码/oneOf/webhooks。
-- password hash 很费 cpu，会影响并发性能
-- strong and generic ID type for global use: primary key
+  - [x] 哪些接口需要登录未在 scalar 接口文档上体现 → 已实现 securitySchemes + per-op security（自描述 extractor + 配置层绑定 scheme，见 `docs/openapi-developer-guide.md §6`）。
+  - defer：角色进 spec（`RequireRole` → `x-required-roles` 扩展，P2）、错误响应 schema（待 validator RFC 9457）、多状态码/oneOf/webhooks、Scalar 离线化。
+- password hash 很费 cpu，会影响并发性能：注册接口、登录接口
+- strong and generic ID type for global use: primary / foreign key (可解决id错误赋值引发的bug：如把 user id 赋值给 order id)
 - [ ] form validation / validators component
 - [ ] catchAll middleware: when system is under maintenance
 - wing-app 版本升级，用户 clone 后进行业务开发后，如何安全得获取上游更新
-- better logging: error trace and business flow logging (db 日志未捕获并记录)
 - schema 未指定 collation，应统一使用 utf8mb4 general ci or better one
 - uuid v7
 - request id: i64 -> uuid
-- rewrite PetChat in wing
-- rewrite Shiftly in wing
+- session id: uuid
+- use uuid for all primary / foreign keys
+- better scoped log level: warn+ for framework and info+ for application in release, debug+ for all in debug
+- logging performance degradation due to default logFn writing to stderr
+- logging structure: (trace / request id, ) level, scope / category, timestamp, log message
+- more security schemes:

@@ -20,6 +20,16 @@ const std = @import("std");
 const Principal = @import("../models/principal.zig").Principal;
 const Authorizer = @import("authorizer.zig").Authorizer;
 
+// `auth_requirement` (on the extractors below) is introspection metadata: it
+// declares *that* this extractor requires authentication (and whether it is
+// optional) — a fact about the extractor itself, named after that fact, not
+// after any consumer. It says nothing about *which* scheme (cookie/bearer/...):
+// the concrete scheme is declared once in app config (`ApiInfo.auth_scheme` in
+// routes.zig), so switching mechanism is a one-place change there and these
+// extractors stay untouched. A plain comptime literal any metadata consumer can
+// read structurally — currently the openapi package, which imports nothing from
+// here (and we import nothing from it): zero coupling, no foreign concept here.
+
 /// The sole authentication primitive: cookie → session → `Principal`.
 /// Missing/invalid session is `error.Unauthorized`; a real IO error from the
 /// session/role lookup propagates unchanged (must never be swallowed as
@@ -55,6 +65,9 @@ pub fn parseSessionId(cookie: []const u8) ?[]const u8 {
 pub const Auth = struct {
     principal: Principal,
 
+    /// Documents this route as requiring authentication (scheme from app config).
+    pub const auth_requirement = .{ .optional = false };
+
     pub fn fromRequestParts(ctx: anytype) !Auth {
         return .{ .principal = try resolvePrincipal(ctx) };
     }
@@ -65,6 +78,9 @@ pub const Auth = struct {
 /// propagates (it is not anonymity).
 pub const OptionalAuth = struct {
     principal: ?Principal,
+
+    /// Documents auth as accepted but not required (anonymous OK).
+    pub const auth_requirement = .{ .optional = true };
 
     pub fn fromRequestParts(ctx: anytype) !OptionalAuth {
         return .{ .principal = resolvePrincipal(ctx) catch |e| switch (e) {
@@ -90,6 +106,10 @@ pub fn RequireRole(comptime role: []const u8) type {
 pub fn Require(comptime Policy: type) type {
     return struct {
         principal: Principal,
+
+        /// Same authn requirement as `Auth`; the role/policy gate is authz on
+        /// top and (v1) is not yet expressed in the spec (see security design).
+        pub const auth_requirement = .{ .optional = false };
 
         pub fn fromRequestParts(ctx: anytype) !@This() {
             const a = try Auth.fromRequestParts(ctx); // authn once

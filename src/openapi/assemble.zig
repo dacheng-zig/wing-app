@@ -28,7 +28,17 @@ pub fn json(
     const a = scratch.allocator();
 
     var components: ObjectMap = .empty;
+    var security_schemes: ObjectMap = .empty;
     var paths: ObjectMap = .empty;
+
+    // Shared across operations: the two maps dedup schema/scheme registrations;
+    // `auth_scheme` is the app scheme that auth-requiring operations bind to.
+    var build_ctx = meta.BuildCtx{
+        .gpa = a,
+        .components = &components,
+        .security_schemes = &security_schemes,
+        .auth_scheme = info.auth_scheme,
+    };
 
     for (docs) |doc| {
         if (doc.meta.hidden) continue;
@@ -37,7 +47,7 @@ pub fn json(
         // so declared path parameters match their `{name}` placeholder.
         const template = try toTemplate(a, doc.path);
 
-        var op = try doc.build_op(a, &components);
+        var op = try doc.build_op(&build_ctx);
         try applyMeta(&op.object, a, doc.meta, doc.method, template);
 
         const gop = try paths.getOrPut(a, template);
@@ -55,9 +65,10 @@ pub fn json(
     try servers.append(.{ .object = server });
     try root.put(a, "servers", .{ .array = servers });
     try root.put(a, "paths", .{ .object = paths });
-    if (components.count() > 0) {
+    if (components.count() > 0 or security_schemes.count() > 0) {
         var comp: ObjectMap = .empty;
-        try comp.put(a, "schemas", .{ .object = components });
+        if (components.count() > 0) try comp.put(a, "schemas", .{ .object = components });
+        if (security_schemes.count() > 0) try comp.put(a, "securitySchemes", .{ .object = security_schemes });
         try root.put(a, "components", .{ .object = comp });
     }
 
@@ -218,6 +229,49 @@ test "assemble: groups operations under paths, dedups components, skips hidden" 
     // User schema registered exactly once and shared via $ref.
     try testing.expectEqual(@as(usize, 1), root.get("components").?.object.get("schemas").?.object.count());
     try testing.expectEqualStrings("List", paths.get("/users").?.object.get("get").?.object.get("summary").?.string);
+}
+
+test "assemble: auth extractor binds app scheme → per-op security + securitySchemes" {
+    const Ctx = wing.Context(struct { x: u32 });
+    // Intent-only marker; the scheme comes from info.auth_scheme below.
+    const Auth = struct {
+        principal: u32,
+        pub const auth_requirement = .{ .optional = false };
+    };
+    const Handlers = struct {
+        fn me(ctx: *Ctx, a: Auth) anyerror!void {
+            _ = ctx;
+            _ = a;
+        }
+        fn public(ctx: *Ctx) anyerror!void {
+            _ = ctx;
+        }
+    };
+
+    const operation = @import("operation.zig");
+    const docs = [_]meta.RouteDoc{
+        .{ .method = .GET, .path = "/me", .meta = .{}, .build_op = operation.makeBuild(@TypeOf(Handlers.me)) },
+        .{ .method = .GET, .path = "/", .meta = .{}, .build_op = operation.makeBuild(@TypeOf(Handlers.public)) },
+    };
+
+    const spec = try json(testing.allocator, .{
+        .title = "T",
+        .version = "1",
+        .auth_scheme = .{ .name = "cookieSession", .kind = "apiKey", .in = "cookie", .parameter_name = "session_id" },
+    }, &docs);
+    defer testing.allocator.free(spec);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, spec, .{});
+    defer parsed.deinit();
+    const root = parsed.value.object;
+
+    // Scheme defined once under components.securitySchemes.
+    const schemes = root.get("components").?.object.get("securitySchemes").?.object;
+    try testing.expectEqualStrings("apiKey", schemes.get("cookieSession").?.object.get("type").?.string);
+    try testing.expectEqualStrings("session_id", schemes.get("cookieSession").?.object.get("name").?.string);
+    // Gated op carries security; public op does not.
+    try testing.expect(root.get("paths").?.object.get("/me").?.object.get("get").?.object.contains("security"));
+    try testing.expect(!root.get("paths").?.object.get("/").?.object.get("get").?.object.contains("security"));
 }
 
 test "assemble: info contact/license/summary emitted; empty omitted" {

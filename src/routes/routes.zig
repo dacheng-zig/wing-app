@@ -74,6 +74,18 @@ pub fn build(gpa: std.mem.Allocator) !Built {
             .name = "Dacheng Gao",
             .url = "https://github.com/dacheng-zig/wing-app",
         },
+        // The single source of truth for *how* this app authenticates. Auth
+        // extractors (`Auth`/`OptionalAuth`/`Require`) only declare *that* they
+        // need auth (scheme-agnostic) and all bind to this. Switching to bearer
+        // is a one-literal change here: `.{ .name = "bearerAuth", .kind =
+        // "http", .scheme = "bearer" }`.
+        .auth_scheme = .{
+            .name = "cookieSession",
+            .kind = "apiKey",
+            .in = "cookie",
+            .parameter_name = "session_id",
+            .description = "Session cookie issued by POST /api/v1/auth/login.",
+        },
         // No license chosen yet — add `.license = .{ .name = "MIT", .identifier
         // = "MIT" }` (and a LICENSE file) once decided.
     });

@@ -40,7 +40,8 @@ pub const AppState = struct {
     roles: RoleRepository,
     authorizer: Authorizer,
     auth: AuthService,
-    /// Assembled OpenAPI document, served by `web/docs.zig`. Populated by the
+    /// Assembled OpenAPI document, served by the `docs` feature
+    /// (`docs/controllers/docs_controller.zig`). Populated by the
     /// server after `build()` generates it (default empty until then).
     api_docs: ApiDocs = .{},
 
