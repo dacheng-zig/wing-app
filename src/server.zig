@@ -8,6 +8,7 @@ const std = @import("std");
 const zio = @import("zio");
 const talon = @import("talon");
 
+const fd_limit = @import("fd_limit.zig");
 const Config = @import("config/config.zig").Config;
 const AppState = @import("state.zig").AppState;
 const App = @import("app.zig").App;
@@ -59,7 +60,13 @@ pub fn run(init: std.process.Init) !void {
     const addr = try zio.net.IpAddress.parseIp4(config.host, config.port);
     var listener = try talon.TcpListener.listen(addr, .{});
 
-    var server = try talon.http.Server(App).init(gpa, &app, .{});
+    // Reserve fds for the listener, stdio, log files, each pooled DB
+    // connection, and the short-lived KILL-QUERY sidecar a timeout may open per
+    // pooled connection (hence `* 2`), then admit up to the remaining budget.
+    const fd_reserve: u32 = 64 + @as(u32, @intCast(config.db.pool_size)) * 2;
+    var server = try talon.http.Server(App).init(gpa, &app, .{
+        .limits = .{ .max_connections = fd_limit.resolveMaxConnections(fd_reserve) },
+    });
     defer server.deinit();
 
     var group: zio.Group = .init;

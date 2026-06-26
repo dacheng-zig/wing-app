@@ -23,4 +23,7 @@ test {
 
     // request-id tracing: std-only side registry + timestamp/level formatting.
     _ = @import("trace/trace.zig");
+
+    // fd-limit admission policy: pure arithmetic (floor/ceiling/reserve).
+    _ = @import("fd_limit.zig");
 }
