@@ -1,11 +1,10 @@
-//! Entry point.
-//!
-//! Intentionally thin: the executable's only job is to hand the allocator to
-//! the server bootstrap. All wiring lives in the layered modules under `src/`
-//! (config, state, app, routes, controllers, services, repositories, ...).
-
 const std = @import("std");
 const server = @import("server.zig");
+
+/// Root log function: every std.log line gets timestamp + request id + level + scope + msg.
+pub const std_options: std.Options = .{
+    .logFn = @import("trace/log.zig").requestAwareLogFn,
+};
 
 pub fn main(init: std.process.Init) !void {
     try server.run(init);

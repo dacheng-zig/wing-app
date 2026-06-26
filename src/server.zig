@@ -2,7 +2,7 @@
 //!
 //! Owns the runtime lifecycle: load config, start the zio runtime, build the
 //! router and state, wire the talon HTTP server, and watch SIGINT for a clean
-//! drain. `main.zig` stays a one-liner that calls `run`.
+//! drain.
 
 const std = @import("std");
 const zio = @import("zio");
@@ -24,17 +24,13 @@ fn signalWatcher(server: *talon.http.Server(App)) !void {
 
 pub fn run(init: std.process.Init) !void {
     const gpa = init.gpa;
+
     const config = Config.load(init.environ_map);
 
-    // Multi-threaded runtime: spread connection coroutines and the DB client
-    // across N executors (cores). Single-threaded (the zio default) pins all
-    // work to one core and caps throughput well below the box's capacity.
-    const rt = try zio.Runtime.init(gpa, .{
-        .executors = if (config.worker_threads == 0)
-            .auto
-        else
-            .exact(@max(1, @min(config.worker_threads, 64))),
-    });
+    // Single-executor runtime: ALL coroutines run on one OS thread under zio's
+    // cooperative scheduling. With a co-located DB the work is socket-syscall
+    // bound, so extra executors only add cross-core contention.
+    const rt = try zio.Runtime.init(gpa, .{ .executors = .exact(1) });
     defer rt.deinit();
 
     const built = try routes.build(gpa);

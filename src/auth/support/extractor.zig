@@ -108,7 +108,7 @@ pub fn Require(comptime Policy: type) type {
         principal: Principal,
 
         /// Same authn requirement as `Auth`; the role/policy gate is authz on
-        /// top and (v1) is not yet expressed in the spec (see security design).
+        /// top and (v1) is not yet expressed in the spec.
         pub const auth_requirement = .{ .optional = false };
 
         pub fn fromRequestParts(ctx: anytype) !@This() {

@@ -31,13 +31,6 @@ pub const Config = struct {
     port: u16 = 8080,
     greeting: []const u8 = "Hello, world!",
     db: Db = .{},
-    /// Number of zio executor threads. Defaults to `1` (single-threaded): with
-    /// a co-located DB the work is socket-syscall bound, so extra executors only
-    /// add cross-core contention and even slow down non-DB routes. Set
-    /// `WORKER_THREADS=N` for N executors, or `WORKER_THREADS=0` to auto-detect
-    /// the CPU count — worthwhile when the DB is remote and requests become
-    /// CPU-bound. Clamped to 1..=64.
-    worker_threads: u8 = 1,
 
     /// Build config from defaults, overriding from the environment.
     ///
@@ -63,9 +56,6 @@ pub const Config = struct {
             if (std.fmt.parseInt(usize, v, 10)) |n| {
                 if (n != 0) cfg.db.pool_size = n;
             } else |_| {}
-        }
-        if (env.get("WORKER_THREADS")) |v| {
-            if (std.fmt.parseInt(u8, v, 10)) |n| cfg.worker_threads = n else |_| {}
         }
         return cfg;
     }

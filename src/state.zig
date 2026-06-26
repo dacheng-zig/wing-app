@@ -40,9 +40,8 @@ pub const AppState = struct {
     roles: RoleRepository,
     authorizer: Authorizer,
     auth: AuthService,
-    /// Assembled OpenAPI document, served by the `docs` feature
-    /// (`docs/controllers/docs_controller.zig`). Populated by the
-    /// server after `build()` generates it (default empty until then).
+    /// Assembled OpenAPI document, served by the `docs` feature. Populated by
+    /// the server after `build()` generates it (default empty until then).
     api_docs: ApiDocs = .{},
 
     /// `io` supplies the CSPRNG, wall-clock, and argon2 entropy that Zig 0.16

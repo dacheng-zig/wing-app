@@ -20,4 +20,7 @@ test {
     // reflect over wing's public extractor types (the test module imports
     // `wing`) but need no HTTP stack or database.
     _ = @import("openapi/root.zig");
+
+    // request-id tracing: std-only side registry + timestamp/level formatting.
+    _ = @import("trace/trace.zig");
 }

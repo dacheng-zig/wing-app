@@ -21,4 +21,4 @@
 - better scoped log level: warn+ for framework and info+ for application in release, debug+ for all in debug
 - logging performance degradation due to default logFn writing to stderr
 - logging structure: (trace / request id, ) level, scope / category, timestamp, log message
-- more security schemes:
+- request id 贯穿整个日志流，方便 trace + debug
