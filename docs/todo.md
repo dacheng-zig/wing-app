@@ -8,7 +8,6 @@
 - [x] openapi doc
   - [x] 哪些接口需要登录未在 scalar 接口文档上体现 → 已实现 securitySchemes + per-op security（自描述 extractor + 配置层绑定 scheme，见 `docs/openapi-developer-guide.md §6`）。
   - defer：角色进 spec（`RequireRole` → `x-required-roles` 扩展，P2）、错误响应 schema（待 validator RFC 9457）、多状态码/oneOf/webhooks、Scalar 离线化。
-- password hash 很费 cpu，会影响并发性能：注册接口、登录接口
 - strong and generic ID type for global use: primary / foreign key (可解决id错误赋值引发的bug：如把 user id 赋值给 order id)
 - [ ] form validation / validators component
 - [ ] catchAll middleware: when system is under maintenance

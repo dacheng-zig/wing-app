@@ -6,6 +6,7 @@
 //! service should be callable from a CLI or a job, not just a web handler.
 
 const std = @import("std");
+const zio = @import("zio");
 const UserRepository = @import("../repositories/user_repository.zig").UserRepository;
 const User = @import("../models/user.zig").User;
 const CreateUserReq = @import("../models/user.zig").CreateUserReq;
@@ -27,7 +28,11 @@ pub const UserService = struct {
     pub fn register(self: *UserService, arena: std.mem.Allocator, req: CreateUserReq) !User {
         if (req.name.len == 0 or req.username.len == 0 or req.password.len == 0)
             return error.InvalidCredentials;
-        const hash = try password.hash(self.io, self.gpa, arena, req.password);
+        // argon2 hash is ~tens of ms of pure CPU; offload it to zio's thread
+        // pool so the single HTTP executor isn't stalled. join() suspends this
+        // coroutine, not the executor.
+        var hash_task = try zio.spawnBlocking(password.hash, .{ self.io, self.gpa, arena, req.password });
+        const hash = try hash_task.join();
         return self.repo.create(arena, req.name, req.username, hash);
     }
 
