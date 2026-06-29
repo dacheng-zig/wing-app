@@ -17,4 +17,3 @@
 - session id: uuid
 - use uuid for all primary / foreign keys
 - wing-app 需要一个响当当的项目名字
-- 请求日志中的用时小数位数太多 (21.537042ms)
