@@ -1,8 +1,8 @@
 //! Authentication business logic: credential verification.
 //!
-//! Sits between the controller (HTTP) and storage: it looks up the stored hash
+//! Sits between the handler (HTTP) and storage: it looks up the stored hash
 //! and verifies the password, returning the authenticated user id. Session
-//! creation and cookie writing are the controller's job (they touch HTTP), so
+//! creation and cookie writing are the handler's job (they touch HTTP), so
 //! this service stays callable from a CLI or a job.
 //!
 //! IO/allocator: argon2 verification needs a `std.Io` (salt-free here, but the

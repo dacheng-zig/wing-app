@@ -1,6 +1,0 @@
-CREATE TABLE IF NOT EXISTS sessions (
-  session_id CHAR(32) PRIMARY KEY,
-  user_id    BIGINT UNSIGNED NOT NULL,
-  expires_at BIGINT UNSIGNED NOT NULL,
-  INDEX (user_id)
-) ENGINE=InnoDB

@@ -31,13 +31,12 @@ pub fn json(
     var security_schemes: ObjectMap = .empty;
     var paths: ObjectMap = .empty;
 
-    // Shared across operations: the two maps dedup schema/scheme registrations;
-    // `auth_scheme` is the app scheme that auth-requiring operations bind to.
+    // Shared across operations: the two maps dedup schema/scheme registrations.
+    // Auth schemes travel on the extractor types, so nothing app-level to thread.
     var build_ctx = meta.BuildCtx{
         .gpa = a,
         .components = &components,
         .security_schemes = &security_schemes,
-        .auth_scheme = info.auth_scheme,
     };
 
     for (docs) |doc| {
@@ -231,15 +230,28 @@ test "assemble: groups operations under paths, dedups components, skips hidden" 
     try testing.expectEqualStrings("List", paths.get("/users").?.object.get("get").?.object.get("summary").?.string);
 }
 
-test "assemble: auth extractor binds app scheme → per-op security + securitySchemes" {
+test "assemble: auth extractor's own schemes → per-op OR security + securitySchemes" {
     const Ctx = wing.Context(struct { x: u32 });
-    // Intent-only marker; the scheme comes from info.auth_scheme below.
+    const cookie: meta.SecurityScheme = .{ .name = "cookieSession", .kind = "apiKey", .in = "cookie", .parameter_name = "session_id" };
+    const bearer: meta.SecurityScheme = .{ .name = "bearerToken", .kind = "http", .scheme = "bearer" };
+    // Default-chain marker: accepts cookie OR bearer (schemes travel on the type).
     const Auth = struct {
         principal: u32,
         pub const auth_requirement = .{ .optional = false };
+        pub const security_schemes: []const meta.SecurityScheme = &.{ cookie, bearer };
+    };
+    // Per-route override: bearer only.
+    const BearerOnly = struct {
+        principal: u32,
+        pub const auth_requirement = .{ .optional = false };
+        pub const security_schemes: []const meta.SecurityScheme = &.{bearer};
     };
     const Handlers = struct {
         fn me(ctx: *Ctx, a: Auth) anyerror!void {
+            _ = ctx;
+            _ = a;
+        }
+        fn machine(ctx: *Ctx, a: BearerOnly) anyerror!void {
             _ = ctx;
             _ = a;
         }
@@ -251,26 +263,30 @@ test "assemble: auth extractor binds app scheme → per-op security + securitySc
     const operation = @import("operation.zig");
     const docs = [_]meta.RouteDoc{
         .{ .method = .GET, .path = "/me", .meta = .{}, .build_op = operation.makeBuild(@TypeOf(Handlers.me)) },
+        .{ .method = .POST, .path = "/token/revoke", .meta = .{}, .build_op = operation.makeBuild(@TypeOf(Handlers.machine)) },
         .{ .method = .GET, .path = "/", .meta = .{}, .build_op = operation.makeBuild(@TypeOf(Handlers.public)) },
     };
 
-    const spec = try json(testing.allocator, .{
-        .title = "T",
-        .version = "1",
-        .auth_scheme = .{ .name = "cookieSession", .kind = "apiKey", .in = "cookie", .parameter_name = "session_id" },
-    }, &docs);
+    const spec = try json(testing.allocator, .{ .title = "T", .version = "1" }, &docs);
     defer testing.allocator.free(spec);
 
     const parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, spec, .{});
     defer parsed.deinit();
     const root = parsed.value.object;
 
-    // Scheme defined once under components.securitySchemes.
+    // Both schemes defined once under components.securitySchemes (deduped).
     const schemes = root.get("components").?.object.get("securitySchemes").?.object;
+    try testing.expectEqual(@as(usize, 2), schemes.count());
     try testing.expectEqualStrings("apiKey", schemes.get("cookieSession").?.object.get("type").?.string);
-    try testing.expectEqualStrings("session_id", schemes.get("cookieSession").?.object.get("name").?.string);
-    // Gated op carries security; public op does not.
-    try testing.expect(root.get("paths").?.object.get("/me").?.object.get("get").?.object.contains("security"));
+    try testing.expectEqualStrings("bearer", schemes.get("bearerToken").?.object.get("scheme").?.string);
+    // Default-chain op: OR over both schemes.
+    const me_sec = root.get("paths").?.object.get("/me").?.object.get("get").?.object.get("security").?.array;
+    try testing.expectEqual(@as(usize, 2), me_sec.items.len);
+    // Per-route override: only bearer listed.
+    const machine_sec = root.get("paths").?.object.get("/token/revoke").?.object.get("post").?.object.get("security").?.array;
+    try testing.expectEqual(@as(usize, 1), machine_sec.items.len);
+    try testing.expect(machine_sec.items[0].object.contains("bearerToken"));
+    // Public op: no security.
     try testing.expect(!root.get("paths").?.object.get("/").?.object.get("get").?.object.contains("security"));
 }
 

@@ -10,8 +10,8 @@ const openapi = @import("../openapi/root.zig");
 
 const AppState = @import("../state.zig").AppState;
 const Ctx = @import("../state.zig").Ctx;
-const home_controller = @import("../controllers/home_controller.zig");
-const health_controller = @import("../controllers/health_controller.zig");
+const home = @import("../handlers/home.zig");
+const health = @import("../handlers/health.zig");
 const user_routes = @import("../user/routes/user_routes.zig");
 const auth_routes = @import("../auth/routes/auth_routes.zig");
 const docs_routes = @import("../docs/routes/docs_routes.zig");
@@ -44,7 +44,7 @@ pub fn build(gpa: std.mem.Allocator) !Built {
     // Flat ops routes (merged at the root).
     var ops = openapi.Router(AppState).init(gpa);
     defer ops.deinit();
-    try ops.get("/health", health_controller.check, .{ .summary = "Health check", .tags = &.{"ops"} });
+    try ops.get("/health", health.handle, .{ .summary = "Health check", .tags = &.{"ops"} });
 
     // Docs feature: spec endpoint + Scalar page (hidden; root-level → merged).
     var docs = try docs_routes.build(gpa);
@@ -55,7 +55,7 @@ pub fn build(gpa: std.mem.Allocator) !Built {
     // then frees only the wrapper's bookkeeping (docs list, path arena, and
     // the empty inner left behind by the move).
     defer root.deinit();
-    try root.get("/", home_controller.index, .{ .summary = "Home page", .tags = &.{"ops"} });
+    try root.get("/", home.handle, .{ .summary = "Home page", .tags = &.{"ops"} });
     try root.nest("/api/v1/users", &users);
     try root.nest("/api/v1/auth", &auth);
     try root.merge(&ops);
@@ -68,24 +68,17 @@ pub fn build(gpa: std.mem.Allocator) !Built {
         .summary = "Layered HTTP API on the wing framework (Zig 0.16).",
         .description =
         \\Demonstrates a layered wing application: typed extractors, AppState
-        \\projection, cookie sessions + role authorization, and MySQL via mantle.
+        \\projection, multi-scheme auth (cookie/bearer over one hashed-secret
+        \\credential store) + role authorization, and MySQL via mantle.
         ,
         .contact = .{
             .name = "Dacheng Gao",
             .url = "https://github.com/dacheng-zig/wing-app",
         },
-        // The single source of truth for *how* this app authenticates. Auth
-        // extractors (`Auth`/`OptionalAuth`/`Require`) only declare *that* they
-        // need auth (scheme-agnostic) and all bind to this. Switching to bearer
-        // is a one-literal change here: `.{ .name = "bearerAuth", .kind =
-        // "http", .scheme = "bearer" }`.
-        .auth_scheme = .{
-            .name = "cookieSession",
-            .kind = "apiKey",
-            .in = "cookie",
-            .parameter_name = "session_id",
-            .description = "Session cookie issued by POST /api/v1/auth/login.",
-        },
+        // Auth schemes are no longer declared app-wide: each auth extractor
+        // carries the scheme(s) it accepts (see auth/support/auth.zig), so the
+        // generated securitySchemes/security stay in lockstep with the runtime
+        // composite. Changing channels is a one-place edit there.
         // No license chosen yet — add `.license = .{ .name = "MIT", .identifier
         // = "MIT" }` (and a LICENSE file) once decided.
     });

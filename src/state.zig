@@ -16,8 +16,11 @@ const Config = @import("config/config.zig").Config;
 const Database = @import("db/database.zig").Database;
 const UserService = @import("user/services/user_service.zig").UserService;
 const UserRepository = @import("user/repositories/user_repository.zig").UserRepository;
-const SessionStore = @import("auth/services/session.zig").SessionStore;
-const SessionRepository = @import("auth/repositories/session_repository.zig").SessionRepository;
+const credential = @import("auth/services/credential.zig");
+const CredentialRepository = @import("auth/repositories/credential_repository.zig").CredentialRepository;
+/// Concrete credential store: the hashed-secret resolver over the mantle-backed
+/// repository. Backs both browser sessions and API tokens (one `credentials` table).
+const CredentialStore = credential.CredentialStore(CredentialRepository);
 const RoleRepository = @import("auth/repositories/role_repository.zig").RoleRepository;
 const Authorizer = @import("auth/support/authorizer.zig").Authorizer;
 const AuthService = @import("auth/services/auth_service.zig").AuthService;
@@ -35,8 +38,9 @@ pub const AppState = struct {
     database: Database,
     users: UserService,
     /// Auth dependencies. Each has a distinct type so `*T` projection stays
-    /// unambiguous; extractors/controllers reach them via `ctx.state.<field>`.
-    sessions: SessionStore,
+    /// unambiguous; extractors/handlers reach them via `ctx.state.<field>`.
+    /// Auth schemes resolve through `credentials` by field name (see scheme.zig).
+    credentials: CredentialStore,
     roles: RoleRepository,
     authorizer: Authorizer,
     auth: AuthService,
@@ -54,7 +58,7 @@ pub const AppState = struct {
             .config = config,
             .database = database,
             .users = UserService.init(io, gpa, UserRepository.init(gpa, pool)),
-            .sessions = SessionStore.init(io, SessionRepository.init(gpa, pool)),
+            .credentials = CredentialStore.init(io, CredentialRepository.init(gpa, pool)),
             .roles = RoleRepository.init(gpa, pool),
             .authorizer = .{},
             .auth = AuthService.init(io, gpa, UserRepository.init(gpa, pool)),

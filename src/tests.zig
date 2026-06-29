@@ -14,7 +14,15 @@ test {
     _ = @import("auth/models/principal.zig");
     _ = @import("auth/support/password.zig");
     _ = @import("auth/support/authorizer.zig");
-    _ = @import("auth/support/extractor.zig");
+    // Credential store: hashing/expiry logic exercised against a fake repo
+    // (generic over the repository, so no MySQL needed here).
+    _ = @import("auth/services/credential.zig");
+    // Locators (axis A): cookie/bearer/query/header extraction, fake-request driven.
+    _ = @import("auth/support/locate.zig");
+    // Scheme/Composite + extractors: OR ordering, short-circuit, role gate.
+    _ = @import("auth/support/scheme.zig");
+    // App auth assembly: the single declaration of the default channel chain.
+    _ = @import("auth/support/auth.zig");
 
     // openapi package: identity/classification/schema/assembly units. These
     // reflect over wing's public extractor types (the test module imports

@@ -1,7 +1,7 @@
 //! View layer — server-rendered HTML.
 //!
 //! Views turn data into a presentation format. Keeping rendering out of the
-//! controller keeps handlers thin and makes the markup easy to find. This
+//! handler keeps it thin and makes the markup easy to find. This
 //! minimal example uses `allocPrint`; swap in a template engine (e.g. zmpl)
 //! when the surface grows.
 

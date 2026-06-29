@@ -13,10 +13,10 @@
 //!
 //! Migrations stay centralized here rather than per-module because they are a
 //! single ordered set applied by one startup runner, spanning the users, roles,
-//! and sessions tables together.
+//! and credentials tables together.
 
 pub const migrations = [_][]const u8{
     @embedFile("migrations/001_create_users.sql"),
     @embedFile("migrations/002_create_roles.sql"),
-    @embedFile("migrations/003_create_sessions.sql"),
+    @embedFile("migrations/003_create_credentials.sql"),
 };

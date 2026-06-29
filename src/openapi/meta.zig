@@ -40,12 +40,12 @@ pub const License = struct {
     url: []const u8 = "",
 };
 
-/// An OpenAPI security scheme (`components.securitySchemes` entry). The app
-/// declares its one authentication mechanism here (the single source of truth
-/// for *how* this deployment authenticates); auth extractors only declare *that*
-/// they require auth (see `auth_requirement`), staying scheme-agnostic. Switching
-/// cookie→bearer is therefore a one-literal change here, not per-extractor.
-/// `kind` maps to the OpenAPI `type` field (avoids the `type` keyword).
+/// An OpenAPI security scheme (`components.securitySchemes` entry). Each auth
+/// extractor carries the scheme(s) it accepts via `pub const security_schemes`
+/// (declared in the auth package beside the runtime binding), so the generated
+/// `securitySchemes`/`security` and the runtime composite derive from one source
+/// and cannot drift. `kind` maps to the OpenAPI `type` field (avoids the `type`
+/// keyword).
 pub const SecurityScheme = struct {
     /// `components.securitySchemes` key, e.g. "cookieSession".
     name: []const u8,
@@ -71,21 +71,16 @@ pub const ApiInfo = struct {
     terms_of_service: []const u8 = "",
     contact: Contact = .{},
     license: License = .{},
-    /// The app's authentication scheme. Required iff any handler uses an auth
-    /// extractor (those declare `auth_requirement`); operations needing auth bind to
-    /// it at assemble time. Leaving it null while an auth op exists is a config
-    /// error (assemble fails with `error.MissingAuthScheme`).
-    auth_scheme: ?SecurityScheme = null,
 };
 
 /// Per-build collaborators threaded into each operation's `BuildFn`:
-/// `components`/`security_schemes` collect deduped `$ref`/scheme registrations;
-/// `auth_scheme` is the app scheme an auth-requiring operation binds to.
+/// `components`/`security_schemes` collect deduped `$ref`/scheme registrations.
+/// Auth schemes travel on the extractor types themselves (`security_schemes`
+/// decl), so there is no app-level scheme to thread here.
 pub const BuildCtx = struct {
     gpa: std.mem.Allocator,
     components: *std.json.ObjectMap,
     security_schemes: *std.json.ObjectMap,
-    auth_scheme: ?SecurityScheme,
 };
 
 /// Renders one operation object (`parameters`/`requestBody`/`responses`/

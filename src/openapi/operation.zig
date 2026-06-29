@@ -7,11 +7,12 @@
 //!     unambiguously means "path params" without touching wing internals.
 //!     A param whose type declares `pub const auth_requirement` (a plain comptime
 //!     literal, read structurally — see `paramRole`/`authOptional`) is an
-//!     auth extractor: it contributes the operation's `security` requirement,
-//!     bound to the app's `auth_scheme` (from `BuildCtx`). The extractor states
-//!     only *that* it needs auth (and whether it's optional) — never *which*
-//!     scheme — so switching cookie→bearer is a one-place config change. Zero
-//!     coupling: neither the openapi nor the auth package imports the other.
+//!     auth extractor. It also carries `pub const security_schemes` (a comptime
+//!     `[]const SecurityScheme`): the OR alternatives this route accepts. The
+//!     generator registers each into `components.securitySchemes` and emits the
+//!     operation's `security` array from them. Zero coupling: neither the openapi
+//!     nor the auth package imports the other — both sides just agree on the
+//!     `auth_requirement` + `security_schemes` decls.
 //!   - `responseOf`: maps the (error-unwrapped) return type to a status +
 //!     optional body, aligned with wing's hardcoded responders
 //!     (Json→200, Created→201, Redirect→302).
@@ -87,10 +88,10 @@ fn operationValue(comptime H: type, ctx: *meta.BuildCtx) anyerror!Value {
     var op: ObjectMap = .empty;
     var params: Array = .init(gpa);
     var request_body: ?Value = null;
-    // Auth extractors all bind to the single app `auth_scheme`, so we only need
-    // to know *whether* the op requires auth and whether any marker is optional
-    // (OptionalAuth admits anonymous access via a leading empty `{}`).
-    var needs_auth = false;
+    // Auth extractors carry their own `security_schemes` (the OR alternatives).
+    // Collect them across auth params (normally one) and note whether any marker
+    // is optional (OptionalAuth admits anonymous access via a leading empty `{}`).
+    var auth_schemes: std.ArrayList(meta.SecurityScheme) = .empty;
     var auth_optional = false;
 
     inline for (fn_info.params[1..]) |p| {
@@ -101,7 +102,13 @@ fn operationValue(comptime H: type, ctx: *meta.BuildCtx) anyerror!Value {
             .query => |T| try appendParams(&params, gpa, components, T, "query"),
             .body => |T| request_body = try jsonBody(T, gpa, components),
             .security => {
-                needs_auth = true;
+                // An auth extractor must carry the scheme(s) it accepts, or the
+                // op would emit `security: []` (silently auth-free). Composite
+                // already @compileErrors on an empty set, so this is the backstop
+                // for a hand-rolled marker that forgot the decl.
+                if (comptime !@hasDecl(P, "security_schemes"))
+                    @compileError(@typeName(P) ++ " declares auth_requirement but no security_schemes");
+                inline for (P.security_schemes) |s| try auth_schemes.append(gpa, s);
                 auth_optional = auth_optional or comptime authOptional(P);
             },
         }
@@ -109,10 +116,9 @@ fn operationValue(comptime H: type, ctx: *meta.BuildCtx) anyerror!Value {
 
     if (params.items.len > 0) try op.put(gpa, "parameters", .{ .array = params });
     if (request_body) |rb| try op.put(gpa, "requestBody", rb);
-    if (needs_auth) {
-        const scheme = ctx.auth_scheme orelse return error.MissingAuthScheme;
-        try registerScheme(ctx.security_schemes, gpa, scheme);
-        try op.put(gpa, "security", try securityArray(gpa, scheme.name, auth_optional));
+    if (auth_schemes.items.len > 0) {
+        for (auth_schemes.items) |s| try registerScheme(ctx.security_schemes, gpa, s);
+        try op.put(gpa, "security", try securityArray(gpa, auth_schemes.items, auth_optional));
     }
 
     const resp = comptime responseOf(fn_info.return_type.?);
@@ -139,15 +145,17 @@ fn registerScheme(security_schemes: *ObjectMap, gpa: std.mem.Allocator, scheme: 
     try security_schemes.put(gpa, scheme.name, .{ .object = obj });
 }
 
-/// Builds the operation `security` array binding `scheme_name` (apiKey/http
-/// carry no scopes → empty array). Required → `[{name:[]}]`; optional →
-/// `[{}, {name:[]}]`, where the leading `{}` marks "no auth also allowed".
-fn securityArray(gpa: std.mem.Allocator, scheme_name: []const u8, optional: bool) !Value {
-    var requirement: ObjectMap = .empty;
-    try requirement.put(gpa, scheme_name, .{ .array = Array.init(gpa) });
+/// Builds the operation `security` array: one alternative per scheme (OR
+/// semantics; apiKey/http carry no scopes → empty array). Required → `[{s1:[]},
+/// {s2:[]}]`; optional prepends `{}` (the "no auth also allowed" alternative).
+fn securityArray(gpa: std.mem.Allocator, schemes: []const meta.SecurityScheme, optional: bool) !Value {
     var arr: Array = .init(gpa);
     if (optional) try arr.append(.{ .object = .empty });
-    try arr.append(.{ .object = requirement });
+    for (schemes) |s| {
+        var requirement: ObjectMap = .empty;
+        try requirement.put(gpa, s.name, .{ .array = Array.init(gpa) });
+        try arr.append(.{ .object = requirement });
+    }
     return .{ .array = arr };
 }
 
@@ -272,7 +280,7 @@ test "operationValue derives params, body, and response from a handler" {
     const a = arena.allocator();
     var components: ObjectMap = .empty;
     var security_schemes: ObjectMap = .empty;
-    var ctx = meta.BuildCtx{ .gpa = a, .components = &components, .security_schemes = &security_schemes, .auth_scheme = null };
+    var ctx = meta.BuildCtx{ .gpa = a, .components = &components, .security_schemes = &security_schemes };
 
     const op = try operationValue(@TypeOf(Handler), &ctx);
     // One path parameter.
@@ -289,18 +297,21 @@ test "operationValue derives params, body, and response from a handler" {
     try testing.expect(!op.object.contains("security"));
 }
 
-test "operationValue binds a scheme-agnostic auth extractor to the app scheme" {
+test "operationValue emits an OR security array from the extractor's own schemes" {
     const Ctx = wing.Context(struct { x: u32 });
-    // Intent-only markers (shape mirrors auth's `Auth`/`OptionalAuth`): they
-    // declare *that* auth is required, never *which* scheme — that comes from
-    // the BuildCtx `auth_scheme` below.
+    const cookie: meta.SecurityScheme = .{ .name = "cookieSession", .kind = "apiKey", .in = "cookie", .parameter_name = "session_id", .description = "Session cookie." };
+    const bearer: meta.SecurityScheme = .{ .name = "bearerToken", .kind = "http", .scheme = "bearer" };
+    // Markers mirror auth's `Authenticated`/`Optional`: each carries the OR
+    // alternatives it accepts via `security_schemes`.
     const Required = struct {
         principal: u32,
         pub const auth_requirement = .{ .optional = false };
+        pub const security_schemes: []const meta.SecurityScheme = &.{ cookie, bearer };
     };
     const Optional = struct {
         principal: ?u32,
         pub const auth_requirement = .{ .optional = true };
+        pub const security_schemes: []const meta.SecurityScheme = &.{ cookie, bearer };
     };
     const Handlers = struct {
         fn gated(ctx: *Ctx, a: Required) anyerror!void {
@@ -318,52 +329,26 @@ test "operationValue binds a scheme-agnostic auth extractor to the app scheme" {
     const a = arena.allocator();
     var components: ObjectMap = .empty;
     var security_schemes: ObjectMap = .empty;
-    var ctx = meta.BuildCtx{
-        .gpa = a,
-        .components = &components,
-        .security_schemes = &security_schemes,
-        .auth_scheme = .{ .name = "cookieSession", .kind = "apiKey", .in = "cookie", .parameter_name = "session_id", .description = "Session cookie." },
-    };
+    var ctx = meta.BuildCtx{ .gpa = a, .components = &components, .security_schemes = &security_schemes };
 
-    // Required: `security: [{cookieSession: []}]`, scheme registered once.
+    // Required: `security: [{cookieSession:[]}, {bearerToken:[]}]`; both schemes registered.
     const gated = try operationValue(@TypeOf(Handlers.gated), &ctx);
     const sec = gated.object.get("security").?.array;
-    try testing.expectEqual(@as(usize, 1), sec.items.len);
-    const req = sec.items[0].object.get("cookieSession").?.array;
-    try testing.expectEqual(@as(usize, 0), req.items.len); // empty scope list
-    const scheme = security_schemes.get("cookieSession").?.object;
-    try testing.expectEqualStrings("apiKey", scheme.get("type").?.string);
-    try testing.expectEqualStrings("cookie", scheme.get("in").?.string);
-    try testing.expectEqualStrings("session_id", scheme.get("name").?.string);
+    try testing.expectEqual(@as(usize, 2), sec.items.len);
+    try testing.expect(sec.items[0].object.contains("cookieSession"));
+    try testing.expect(sec.items[1].object.contains("bearerToken"));
+    try testing.expectEqual(@as(usize, 0), sec.items[0].object.get("cookieSession").?.array.items.len); // empty scopes
+    const ck = security_schemes.get("cookieSession").?.object;
+    try testing.expectEqualStrings("apiKey", ck.get("type").?.string);
+    try testing.expectEqualStrings("session_id", ck.get("name").?.string);
+    try testing.expectEqualStrings("bearer", security_schemes.get("bearerToken").?.object.get("scheme").?.string);
 
-    // Optional: leading empty `{}` admits anonymous; scheme deduped (still 1).
+    // Optional: leading empty `{}` admits anonymous; schemes deduped (still 2).
     const maybe = try operationValue(@TypeOf(Handlers.maybe), &ctx);
     const sec2 = maybe.object.get("security").?.array;
-    try testing.expectEqual(@as(usize, 2), sec2.items.len);
+    try testing.expectEqual(@as(usize, 3), sec2.items.len);
     try testing.expectEqual(@as(usize, 0), sec2.items[0].object.count()); // {}
     try testing.expect(sec2.items[1].object.contains("cookieSession"));
-    try testing.expectEqual(@as(usize, 1), security_schemes.count());
-}
-
-test "operationValue errors when an auth op has no configured scheme" {
-    const Ctx = wing.Context(struct { x: u32 });
-    const Required = struct {
-        principal: u32,
-        pub const auth_requirement = .{ .optional = false };
-    };
-    const Handler = struct {
-        fn gated(ctx: *Ctx, auth: Required) anyerror!void {
-            _ = ctx;
-            _ = auth;
-        }
-    }.gated;
-
-    var arena = std.heap.ArenaAllocator.init(testing.allocator);
-    defer arena.deinit();
-    const a = arena.allocator();
-    var components: ObjectMap = .empty;
-    var security_schemes: ObjectMap = .empty;
-    var ctx = meta.BuildCtx{ .gpa = a, .components = &components, .security_schemes = &security_schemes, .auth_scheme = null };
-
-    try testing.expectError(error.MissingAuthScheme, operationValue(@TypeOf(Handler), &ctx));
+    try testing.expect(sec2.items[2].object.contains("bearerToken"));
+    try testing.expectEqual(@as(usize, 2), security_schemes.count());
 }
