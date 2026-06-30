@@ -24,8 +24,9 @@ bootstrap, auth, OpenAPI generation, and request tracing are already in place.
 - **OpenAPI 3.1, generated from your code.** The spec is assembled at comptime from the router and
   handler signatures — served live at `/openapi.json`, rendered by a [Scalar](https://scalar.com)
   UI at `/docs`, and dumpable offline with `zig build openapi`.
-- **Request tracing built in.** Every request gets a process-unique id on the `x-request-id`
-  header, and *every* log line it produces — app, wing, and mantle SQL — carries that id.
+- **Request tracing built in.** Every request gets a time-sortable UUIDv7 (26-char Crockford
+  Base32) on the `x-request-id` header, and *every* log line it produces — app, wing, and
+  mantle SQL — carries that id.
 - **Production-minded defaults.** Graceful `SIGINT` drain, fd-limit-aware connection admission,
   and a single-executor zio runtime tuned for syscall-bound work against a co-located database.
 

@@ -30,6 +30,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("mantle");
 
+    // UUIDv7 generator + Crockford Base32 for request ids (request_scope).
+    const uuid_mod = b.dependency("uuid", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("uuid");
+
     const exe = b.addExecutable(.{
         .name = "wing_app",
         .root_module = b.createModule(.{
@@ -41,6 +47,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "talon", .module = talon_mod },
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
+                .{ .name = "uuid", .module = uuid_mod },
             },
         }),
     });
@@ -64,6 +71,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "talon", .module = talon_mod },
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
+                .{ .name = "uuid", .module = uuid_mod },
             },
         }),
     });

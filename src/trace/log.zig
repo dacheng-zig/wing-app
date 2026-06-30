@@ -14,10 +14,10 @@ const std = @import("std");
 const trace = @import("trace.zig");
 const req_scope = @import("scope.zig");
 
-// Placeholder when no request scope is bound. Same 16-hex-digit width as real
-// ids (see request_scope.zig) so columns line up; real ids start at 1, so the
-// all-zero value is unambiguous.
-const no_request_id = "0000000000000000";
+// Placeholder when no request scope is bound. Same 26-char Base32 width as real
+// ids (see request_scope.zig) so columns line up; real UUIDv7 ids always carry
+// version/variant bits, so the all-zero value is unambiguous.
+const no_request_id = "00000000000000000000000000";
 
 pub fn requestAwareLogFn(
     comptime level: std.log.Level,

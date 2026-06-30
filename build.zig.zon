@@ -14,6 +14,11 @@
         .mantle = .{
             .path = "../mantle",
         },
+        // UUIDv7 request ids (request_scope middleware). Local path during
+        // co-development; switch to a pinned url+hash once uuid tags releases.
+        .uuid = .{
+            .path = "../uuid",
+        },
     },
     .paths = .{
         "build.zig",
