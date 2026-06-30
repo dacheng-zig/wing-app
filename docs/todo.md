@@ -1,17 +1,14 @@
 # todo
 - [-] authentication / authorization middleware and User Component (Guest / Authenticated / Authorized based on Permission or Claim)
-  - server-side sessions (argon2id, CSPRNG sid) + `Auth`/`OptionalAuth`/`RequireRole`/`Require(Policy)` extractors; login/logout/me. See `docs/auth-wing-design.md`.
-  - more password hash methods: argon2id / TBA
+  - more password hash methods: ~~argon2id~~ / TBA
   - object-level authz (BOLA) is a documented service-layer pattern (design §5), ready to apply once a mutable-object endpoint exists.
-  - more schemes: cookie / bearer / query / http basic
-  - more token storage: session / jwt / paseto / custom token
+  - more token resolver: ~~session~~ / ~~api token~~ / jwt / paseto
 - [-] openapi doc
   - defer：错误响应 schema（待 validator RFC 9457）、多状态码/oneOf/webhooks、Scalar 离线化。
 - strong and generic ID type for global use: primary / foreign key (可解决id错误赋值引发的bug：如把 user id 赋值给 order id)
 - [ ] form validation / validators component
 - [ ] catchAll middleware: when system is under maintenance
 - wing-app 版本升级，用户 clone 后进行业务开发后，如何安全得获取上游更新
-- schema 未指定 collation，应统一使用 utf8mb4 general ci or better one
 - uuid v7
 - request id: i64 -> uuid
 - session id: uuid

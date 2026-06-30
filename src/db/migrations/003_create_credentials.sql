@@ -6,4 +6,4 @@ CREATE TABLE IF NOT EXISTS credentials (
   expire_at     BIGINT UNSIGNED NULL,
   UNIQUE INDEX (secret_hash),
   INDEX (user_id)
-) ENGINE=InnoDB
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
