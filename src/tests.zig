@@ -32,6 +32,10 @@ test {
     // request-id tracing: std-only side registry + timestamp/level formatting.
     _ = @import("trace/trace.zig");
 
+    // catchAll maintenance middleware: bypass matching + 503 short-circuit,
+    // driven by a fake ctx/next (no HTTP stack).
+    _ = @import("middleware/maintenance.zig");
+
     // fd-limit admission policy: pure arithmetic (floor/ceiling/reserve).
     _ = @import("fd_limit.zig");
 }
