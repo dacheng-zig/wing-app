@@ -21,6 +21,7 @@ const User = @import("../models/user.zig").User;
 const sql = struct {
     const insert = "INSERT INTO users (name, username, password_hash) VALUES (?, ?, ?)";
     const find_by_username = "SELECT id, password_hash FROM users WHERE username = ?";
+    const update_password_hash = "UPDATE users SET password_hash = ? WHERE id = ?";
     const select_by_id = "SELECT id, name FROM users WHERE id = ?";
     const select_all = "SELECT id, name FROM users ORDER BY id";
 };
@@ -103,6 +104,17 @@ pub const UserRepository = struct {
         if (table.rows.len == 0) return null;
         const row = table.rows[0];
         return .{ .id = row.id, .password_hash = try arena.dupe(u8, row.password_hash) };
+    }
+
+    /// Replace a user's stored password hash. Used for rehash-on-login: when a
+    /// successful verify finds the hash is on an older algorithm, the login path
+    /// upgrades it to the current default. The new `password_hash` is an
+    /// already-hashed PHC string (this layer never sees plaintext).
+    pub fn updatePasswordHash(self: *UserRepository, id: u64, password_hash: []const u8) !void {
+        var db = try mantle.PooledConnection.acquire(self.pool);
+        defer db.release();
+
+        _ = try db.conn.exec(self.gpa, sql.update_password_hash, .{ password_hash, id });
     }
 
     /// Look up one user by id; `null` when no row matches. The returned `name`

@@ -14,6 +14,8 @@ const zio = @import("zio");
 const UserRepository = @import("../../user/repositories/user_repository.zig").UserRepository;
 const password = @import("../support/password.zig");
 
+const log = std.log.scoped(.auth);
+
 pub const AuthService = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
@@ -37,6 +39,24 @@ pub const AuthService = struct {
         var verify_task = try zio.spawnBlocking(password.verify, .{ self.io, self.gpa, cred.password_hash, plain });
         if (!verify_task.join())
             return error.Unauthorized;
+
+        // Transparent upgrade: if the stored hash uses an older algorithm than
+        // the current default, rehash now while the plaintext is in hand. This
+        // is best-effort — a failure must not fail an otherwise valid login, so
+        // it is logged and swallowed, not propagated.
+        if (password.needsRehash(cred.password_hash))
+            self.rehash(arena, cred.id, plain) catch |err|
+                log.warn("rehash-on-login failed for user {d}: {t}", .{ cred.id, err });
+
         return cred.id;
+    }
+
+    /// Recompute `plain`'s hash with the current default algorithm and persist
+    /// it. Separated so the login path can route its errors to a best-effort
+    /// log. The hash is ~tens of ms of CPU, so it is offloaded like `verify`.
+    fn rehash(self: *AuthService, arena: std.mem.Allocator, user_id: u64, plain: []const u8) !void {
+        var hash_task = try zio.spawnBlocking(password.hash, .{ self.io, self.gpa, arena, plain });
+        const new_hash = try hash_task.join();
+        try self.users.updatePasswordHash(user_id, new_hash);
     }
 };

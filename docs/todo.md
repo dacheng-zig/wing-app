@@ -1,6 +1,5 @@
 # todo
 - [-] authentication / authorization middleware and User Component (Guest / Authenticated / Authorized based on Permission or Claim)
-  - more password hash methods: ~~argon2id~~ / TBA
   - object-level authz (BOLA) is a documented service-layer pattern (design §5), ready to apply once a mutable-object endpoint exists.
   - more token resolver: ~~session~~ / ~~api token~~ / jwt / paseto
 - [-] openapi doc
