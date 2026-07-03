@@ -10,18 +10,21 @@
 
 const std = @import("std");
 const mantle = @import("mantle");
+const id_mod = @import("../../db/id.zig");
+const Id = id_mod.Id;
 
 const sql = struct {
-    const insert = "INSERT INTO credentials (secret_hash, user_id, issue_at, expire_at) VALUES (?, ?, ?, ?)";
+    const insert = "INSERT INTO credentials (credential_id, secret_hash, user_id, issue_at, expire_at) VALUES (?, ?, ?, ?, ?)";
     // NULL expire_at means "never expires" (long-lived token); a non-null
     // expiry is checked against the caller's clock.
     const resolve = "SELECT user_id FROM credentials WHERE secret_hash = ? AND (expire_at IS NULL OR expire_at > ?)";
     const delete_by_hash = "DELETE FROM credentials WHERE secret_hash = ?";
 };
 
-/// Row shape for the credential resolve query.
+/// Row shape for the credential resolve query (the CHAR(36) user_id
+/// decodes via `Id.fromMantleText`).
 const CredentialRow = struct {
-    user_id: u64,
+    user_id: Id,
 };
 
 pub const CredentialRepository = struct {
@@ -38,19 +41,19 @@ pub const CredentialRepository = struct {
     pub fn insert(
         self: *CredentialRepository,
         secret_hash: []const u8,
-        user_id: u64,
+        user_id: Id,
         issue_at: u64,
         expire_at: ?u64,
     ) !void {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
-        _ = try db.conn.exec(self.gpa, sql.insert, .{ secret_hash, user_id, issue_at, expire_at });
+        _ = try db.conn.exec(self.gpa, sql.insert, .{ id_mod.new(), secret_hash, user_id, issue_at, expire_at });
     }
 
     /// Resolve a non-expired credential to its `user_id`; `null` if absent or
     /// expired. `now` is wall-clock seconds (the caller's clock, so this stays
     /// IO-free of the system clock).
-    pub fn resolve(self: *CredentialRepository, secret_hash: []const u8, now: u64) !?u64 {
+    pub fn resolve(self: *CredentialRepository, secret_hash: []const u8, now: u64) !?Id {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
 

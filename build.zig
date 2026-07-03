@@ -30,8 +30,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("mantle");
 
-    // UUIDv7 generator + Crockford Base32 for request ids; consumed only by
-    // the wing-trace middleware below.
+    // UUIDv7: entity ids (db/id.zig) and, via wing-trace, Crockford Base32
+    // request ids.
     const uuid_mod = b.dependency("uuid", .{
         .target = target,
         .optimize = optimize,
@@ -63,6 +63,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
                 .{ .name = "wing_trace", .module = wing_trace_mod },
+                .{ .name = "uuid", .module = uuid_mod },
             },
         }),
     });
@@ -87,6 +88,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
                 .{ .name = "wing_trace", .module = wing_trace_mod },
+                .{ .name = "uuid", .module = uuid_mod },
             },
         }),
     });
@@ -104,6 +106,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "wing", .module = wing_mod },
+                .{ .name = "uuid", .module = uuid_mod },
             },
         }),
     });

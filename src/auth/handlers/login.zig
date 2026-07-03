@@ -7,14 +7,16 @@ const wing = @import("wing");
 
 const Ctx = @import("../../state.zig").Ctx;
 const credential_ttl = @import("../support/auth.zig").credential_ttl;
+const Id = @import("../../db/id.zig").Id;
 
 pub const Request = struct {
     username: []const u8,
     password: []const u8,
 };
 
+/// `Id` serializes as canonical UUID text (see db/id.zig).
 pub const Response = struct {
-    user_id: u64,
+    user_id: Id,
 };
 
 pub fn handle(ctx: *Ctx, body: wing.Json(Request)) anyerror!wing.Json(Response) {

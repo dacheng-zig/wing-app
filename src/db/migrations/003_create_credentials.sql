@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS credentials (
-  credential_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  credential_id CHAR(36) PRIMARY KEY,
   secret_hash   CHAR(64) NOT NULL,
-  user_id       BIGINT UNSIGNED NOT NULL,
+  user_id       CHAR(36) NOT NULL,
   issue_at      BIGINT UNSIGNED NOT NULL,
   expire_at     BIGINT UNSIGNED NULL,
   UNIQUE INDEX (secret_hash),

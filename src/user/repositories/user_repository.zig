@@ -17,9 +17,11 @@
 const std = @import("std");
 const mantle = @import("mantle");
 const User = @import("../models/user.zig").User;
+const id_mod = @import("../../db/id.zig");
+const Id = id_mod.Id;
 
 const sql = struct {
-    const insert = "INSERT INTO users (name, username, password_hash) VALUES (?, ?, ?)";
+    const insert = "INSERT INTO users (id, name, username, password_hash) VALUES (?, ?, ?, ?)";
     const find_by_username = "SELECT id, password_hash FROM users WHERE username = ?";
     const update_password_hash = "UPDATE users SET password_hash = ? WHERE id = ?";
     const select_by_id = "SELECT id, name FROM users WHERE id = ?";
@@ -32,23 +34,24 @@ const sql = struct {
 const er_dup_entry = 1062;
 
 /// Row shape for SELECTs. Field order/names map to the projected columns;
-/// mantle scans binary rows into this struct.
+/// mantle scans binary rows into this struct (the CHAR(36) id decodes via
+/// `Id.fromMantleText`).
 const UserRow = struct {
-    id: u64,
+    id: Id,
     name: []const u8,
 };
 
 /// Row shape for the credential lookup (login). Carries only what auth needs:
 /// the id to bind a session to, and the stored hash to verify against.
 const CredentialRow = struct {
-    id: u64,
+    id: Id,
     password_hash: []const u8,
 };
 
 /// A user's stored credentials, returned by `findByUsername`. `password_hash`
 /// is duplicated into the request `arena`.
 pub const Credentials = struct {
-    id: u64,
+    id: Id,
     password_hash: []const u8,
 };
 
@@ -75,7 +78,8 @@ pub const UserRepository = struct {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
 
-        const ok = db.conn.exec(self.gpa, sql.insert, .{ name, username, password_hash }) catch |err| {
+        const new_id = id_mod.new();
+        _ = db.conn.exec(self.gpa, sql.insert, .{ new_id, name, username, password_hash }) catch |err| {
             // A duplicate username is a client error (409), not a server fault.
             if (err == error.ServerError) {
                 if (db.conn.lastError()) |se| {
@@ -84,7 +88,7 @@ pub const UserRepository = struct {
             }
             return err;
         };
-        return .{ .id = ok.last_insert_id, .name = try arena.dupe(u8, name) };
+        return .{ .id = new_id, .name = try arena.dupe(u8, name) };
     }
 
     /// Look up a user's credentials by username for login; `null` when no row
@@ -110,7 +114,7 @@ pub const UserRepository = struct {
     /// successful verify finds the hash is on an older algorithm, the login path
     /// upgrades it to the current default. The new `password_hash` is an
     /// already-hashed PHC string (this layer never sees plaintext).
-    pub fn updatePasswordHash(self: *UserRepository, id: u64, password_hash: []const u8) !void {
+    pub fn updatePasswordHash(self: *UserRepository, id: Id, password_hash: []const u8) !void {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
 
@@ -119,7 +123,7 @@ pub const UserRepository = struct {
 
     /// Look up one user by id; `null` when no row matches. The returned `name`
     /// is duplicated into `arena`.
-    pub fn findById(self: *UserRepository, arena: std.mem.Allocator, id: u64) !?User {
+    pub fn findById(self: *UserRepository, arena: std.mem.Allocator, id: Id) !?User {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
 

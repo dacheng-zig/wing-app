@@ -12,9 +12,10 @@
 //! rework later (YAGNI).
 
 const std = @import("std");
+const Id = @import("../../db/id.zig").Id;
 
 pub const Principal = struct {
-    id: u64,
+    id: Id,
     /// Resolved roles for coarse-grained authorization. Arena-owned.
     roles: []const []const u8 = &.{},
 
@@ -29,11 +30,11 @@ pub const Principal = struct {
 };
 
 test "hasRole: present, absent, and empty set" {
-    const a = Principal{ .id = 1, .roles = &.{ "admin", "editor" } };
+    const a = Principal{ .id = .fromInt(1), .roles = &.{ "admin", "editor" } };
     try std.testing.expect(a.hasRole("admin"));
     try std.testing.expect(a.hasRole("editor"));
     try std.testing.expect(!a.hasRole("viewer"));
 
-    const anon = Principal{ .id = 0 };
+    const anon = Principal{ .id = .nil };
     try std.testing.expect(!anon.hasRole("admin"));
 }

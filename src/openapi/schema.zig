@@ -33,6 +33,14 @@ pub fn schemaValue(comptime T: type, gpa: std.mem.Allocator, components: *Object
                 " — only slices ([]T, []const u8) are supported"),
         },
         .@"struct" => blk: {
+            // A struct that owns its wire form (custom `jsonStringify`)
+            // declares its schema too — reflecting its fields would document
+            // a shape that never appears on the wire.
+            if (@hasDecl(T, "openapi_type")) break :blk try wireTypeNode(T, gpa);
+            if (comptime std.meta.hasFn(T, "jsonStringify"))
+                @compileError("openapi: " ++ @typeName(T) ++ " has a custom jsonStringify — " ++
+                    "declare `pub const openapi_type` (and optionally `openapi_format`) " ++
+                    "so the documented schema matches the wire form");
             try defineStruct(T, gpa, components);
             break :blk try refNode(T, gpa);
         },
@@ -71,6 +79,16 @@ pub fn isRequired(comptime f: std.builtin.Type.StructField) bool {
 fn scalar(gpa: std.mem.Allocator, comptime type_name: []const u8) !Value {
     var obj: ObjectMap = .empty;
     try obj.put(gpa, "type", .{ .string = type_name });
+    return .{ .object = obj };
+}
+
+/// Schema for a struct with a declared wire shape (`openapi_type`, optional
+/// `openapi_format`) — e.g. the app's `Id`, which serializes as a UUID string.
+fn wireTypeNode(comptime T: type, gpa: std.mem.Allocator) !Value {
+    var obj: ObjectMap = .empty;
+    try obj.put(gpa, "type", .{ .string = T.openapi_type });
+    if (@hasDecl(T, "openapi_format"))
+        try obj.put(gpa, "format", .{ .string = T.openapi_format });
     return .{ .object = obj };
 }
 
@@ -163,6 +181,31 @@ test "schema: scalars, optionals, slices" {
     try testing.expectEqualStrings(
         \\{"type":"array","items":{"type":"string"}}
     , try render(try schemaValue([]const []const u8, a, &components), a));
+}
+
+test "schema: struct with a declared wire type inlines it (no component)" {
+    const WireId = struct {
+        v: u128,
+        pub fn jsonStringify(self: @This(), jw: anytype) !void {
+            _ = self;
+            try jw.write("stub");
+        }
+        pub const openapi_type = "string";
+        pub const openapi_format = "uuid";
+    };
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+    var components: ObjectMap = .empty;
+
+    try testing.expectEqualStrings(
+        \\{"type":"string","format":"uuid"}
+    , try render(try schemaValue(WireId, a, &components), a));
+    try testing.expectEqual(@as(usize, 0), components.count());
+    // Optional wire type keeps the format through the 3.1 null union.
+    try testing.expectEqualStrings(
+        \\{"type":["string","null"],"format":"uuid"}
+    , try render(try schemaValue(?WireId, a, &components), a));
 }
 
 test "schema: named struct registers a component and refs it" {

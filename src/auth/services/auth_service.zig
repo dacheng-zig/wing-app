@@ -12,6 +12,8 @@
 const std = @import("std");
 const zio = @import("zio");
 const UserRepository = @import("../../user/repositories/user_repository.zig").UserRepository;
+const id_mod = @import("../../db/id.zig");
+const Id = id_mod.Id;
 const password = @import("../support/password.zig");
 
 const log = std.log.scoped(.auth);
@@ -30,7 +32,7 @@ pub const AuthService = struct {
     /// Failure is always `error.Unauthorized` whether the user is missing or
     /// the password is wrong — the response must not let an attacker enumerate
     /// usernames (mapped to 401 by wing). `arena` owns the looked-up hash.
-    pub fn login(self: *AuthService, arena: std.mem.Allocator, username: []const u8, plain: []const u8) !u64 {
+    pub fn login(self: *AuthService, arena: std.mem.Allocator, username: []const u8, plain: []const u8) !Id {
         const cred = (try self.users.findByUsername(arena, username)) orelse
             return error.Unauthorized;
         // argon2 verify is ~tens of ms of pure CPU; offload it to zio's thread
@@ -45,8 +47,10 @@ pub const AuthService = struct {
         // is best-effort — a failure must not fail an otherwise valid login, so
         // it is logged and swallowed, not propagated.
         if (password.needsRehash(cred.password_hash))
-            self.rehash(arena, cred.id, plain) catch |err|
-                log.warn("rehash-on-login failed for user {d}: {t}", .{ cred.id, err });
+            self.rehash(arena, cred.id, plain) catch |err| {
+                const id_text = id_mod.toText(cred.id);
+                log.warn("rehash-on-login failed for user {s}: {t}", .{ &id_text, err });
+            };
 
         return cred.id;
     }
@@ -54,7 +58,7 @@ pub const AuthService = struct {
     /// Recompute `plain`'s hash with the current default algorithm and persist
     /// it. Separated so the login path can route its errors to a best-effort
     /// log. The hash is ~tens of ms of CPU, so it is offloaded like `verify`.
-    fn rehash(self: *AuthService, arena: std.mem.Allocator, user_id: u64, plain: []const u8) !void {
+    fn rehash(self: *AuthService, arena: std.mem.Allocator, user_id: Id, plain: []const u8) !void {
         var hash_task = try zio.spawnBlocking(password.hash, .{ self.io, self.gpa, arena, plain });
         const new_hash = try hash_task.join();
         try self.users.updatePasswordHash(user_id, new_hash);

@@ -9,6 +9,7 @@ const std = @import("std");
 const zio = @import("zio");
 const UserRepository = @import("../repositories/user_repository.zig").UserRepository;
 const User = @import("../models/user.zig").User;
+const Id = @import("../../db/id.zig").Id;
 const password = @import("../../auth/support/password.zig");
 
 pub const UserService = struct {
@@ -37,7 +38,7 @@ pub const UserService = struct {
 
     /// Fetch one user; `error.NotFound` is mapped to 404 by wing's defaults.
     /// Returned data is owned by `arena`.
-    pub fn get(self: *UserService, arena: std.mem.Allocator, id: u64) !User {
+    pub fn get(self: *UserService, arena: std.mem.Allocator, id: Id) !User {
         return (try self.repo.findById(arena, id)) orelse error.NotFound;
     }
 

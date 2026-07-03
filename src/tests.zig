@@ -11,6 +11,9 @@
 //! the security-critical auth logic.
 
 test {
+    // Entity ids: UUIDv7 mint + text/column round-trips (pure, no DB).
+    _ = @import("db/id.zig");
+
     _ = @import("auth/models/principal.zig");
     _ = @import("auth/support/password.zig");
     _ = @import("auth/support/authorizer.zig");

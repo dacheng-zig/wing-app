@@ -1,10 +1,10 @@
 //! Scheme + Composite: bind the two auth axes and compose them in order.
 //!
 //! A Scheme is the unified primitive — any comptime type with
-//! `pub fn authenticate(ctx) !?u64`:
+//! `pub fn authenticate(ctx) !?Id`:
 //!   - `null`  ⟹ no identity from this scheme (credential absent, OR present
 //!               but invalid — forged/expired).
-//!   - `u64`   ⟹ a resolved uid.
+//!   - `Id`    ⟹ a resolved uid (UUIDv7, see db/id.zig).
 //!   - `error` ⟹ a real IO error (resolver DB failure, ...) — never swallowed.
 //!
 //! `Token(Locator, resolver_field, doc)` binds axis A (a Locator, see locate.zig)
@@ -24,6 +24,7 @@
 
 const std = @import("std");
 const Principal = @import("../models/principal.zig").Principal;
+const Id = @import("../../db/id.zig").Id;
 const SecurityScheme = @import("../../openapi/meta.zig").SecurityScheme;
 
 /// Token-class scheme = a Locator × a resolver field. `doc` is this scheme's
@@ -37,10 +38,10 @@ pub fn Token(
     return struct {
         pub const security_schemes: []const SecurityScheme = &.{doc};
 
-        pub fn authenticate(ctx: anytype) !?u64 {
+        pub fn authenticate(ctx: anytype) !?Id {
             const token = Locator.locate(ctx) orelse return null; // absent → next scheme
             const resolver = &@field(ctx.state, resolver_field);
-            return resolver.resolve(token); // !?u64: unknown/expired → null, IO → propagate
+            return resolver.resolve(token); // !?Id: unknown/expired → null, IO → propagate
         }
     };
 }
@@ -53,7 +54,7 @@ pub fn Composite(comptime schemes: anytype) type {
     return struct {
         pub const security_schemes: []const SecurityScheme = concatDocs(schemes);
 
-        pub fn authenticate(ctx: anytype) !?u64 {
+        pub fn authenticate(ctx: anytype) !?Id {
             inline for (schemes) |S| {
                 if (try S.authenticate(ctx)) |uid| return uid; // hit → stop; IO already propagated by try
             }
@@ -146,6 +147,11 @@ pub fn Role(comptime r: []const u8) type {
 
 const testing = std.testing;
 const locate = @import("locate.zig");
+
+/// Deterministic test ids without minting real v7 values.
+fn idOf(n: u128) Id {
+    return .fromInt(n);
+}
 const Authorizer = @import("authorizer.zig").Authorizer;
 
 const FakeReq = struct {
@@ -160,10 +166,10 @@ const FakeReq = struct {
 /// (to assert short-circuit). `io_error` simulates a real DB failure.
 const FakeResolver = struct {
     known: []const u8 = "good",
-    uid: u64 = 1,
+    uid: Id = idOf(1),
     io_error: bool = false,
     calls: usize = 0,
-    fn resolve(self: *FakeResolver, token: []const u8) !?u64 {
+    fn resolve(self: *FakeResolver, token: []const u8) !?Id {
         self.calls += 1;
         if (self.io_error) return error.ConnectionLost;
         return if (std.mem.eql(u8, token, self.known)) self.uid else null;
@@ -172,7 +178,7 @@ const FakeResolver = struct {
 
 const FakeRoles = struct {
     roles: []const []const u8 = &.{},
-    fn rolesOf(self: *FakeRoles, arena: std.mem.Allocator, uid: u64) ![]const []const u8 {
+    fn rolesOf(self: *FakeRoles, arena: std.mem.Allocator, uid: Id) ![]const []const u8 {
         _ = arena;
         _ = uid;
         return self.roles;
@@ -199,10 +205,10 @@ const cookie_scheme = Token(locate.Cookie("session_id"), "credentials", .{ .name
 const bearer_scheme = Token(locate.Bearer, "credentials", .{ .name = "bearerToken", .kind = "http", .scheme = "bearer" });
 
 test "Token: absent → null, invalid → null, hit → uid, IO → propagate" {
-    var st = FakeState{ .credentials = .{ .known = "good", .uid = 7 } };
-    try testing.expectEqual(@as(?u64, null), try cookie_scheme.authenticate(ctxWith(&st, &.{})));
-    try testing.expectEqual(@as(?u64, null), try cookie_scheme.authenticate(ctxWith(&st, &.{.{ "cookie", "session_id=bad" }})));
-    try testing.expectEqual(@as(?u64, 7), try cookie_scheme.authenticate(ctxWith(&st, &.{.{ "cookie", "session_id=good" }})));
+    var st = FakeState{ .credentials = .{ .known = "good", .uid = idOf(7) } };
+    try testing.expectEqual(@as(?Id, null), try cookie_scheme.authenticate(ctxWith(&st, &.{})));
+    try testing.expectEqual(@as(?Id, null), try cookie_scheme.authenticate(ctxWith(&st, &.{.{ "cookie", "session_id=bad" }})));
+    try testing.expectEqual(@as(?Id, idOf(7)), try cookie_scheme.authenticate(ctxWith(&st, &.{.{ "cookie", "session_id=good" }})));
 
     var broken = FakeState{ .credentials = .{ .io_error = true } };
     try testing.expectError(error.ConnectionLost, cookie_scheme.authenticate(ctxWith(&broken, &.{.{ "cookie", "session_id=good" }})));
@@ -212,25 +218,25 @@ test "Composite: order, fall-through on absent/invalid, short-circuit on hit" {
     const C = Composite(.{ cookie_scheme, bearer_scheme });
 
     // cookie absent → bearer consulted and hits.
-    var st1 = FakeState{ .credentials = .{ .known = "good", .uid = 5 } };
-    try testing.expectEqual(@as(?u64, 5), try C.authenticate(ctxWith(&st1, &.{.{ "authorization", "Bearer good" }})));
+    var st1 = FakeState{ .credentials = .{ .known = "good", .uid = idOf(5) } };
+    try testing.expectEqual(@as(?Id, idOf(5)), try C.authenticate(ctxWith(&st1, &.{.{ "authorization", "Bearer good" }})));
 
     // cookie present-but-invalid → falls through to a valid bearer.
-    var st2 = FakeState{ .credentials = .{ .known = "good", .uid = 5 } };
-    try testing.expectEqual(@as(?u64, 5), try C.authenticate(ctxWith(&st2, &.{ .{ "cookie", "session_id=bad" }, .{ "authorization", "Bearer good" } })));
+    var st2 = FakeState{ .credentials = .{ .known = "good", .uid = idOf(5) } };
+    try testing.expectEqual(@as(?Id, idOf(5)), try C.authenticate(ctxWith(&st2, &.{ .{ "cookie", "session_id=bad" }, .{ "authorization", "Bearer good" } })));
 
     // both absent → null.
     var st3 = FakeState{};
-    try testing.expectEqual(@as(?u64, null), try C.authenticate(ctxWith(&st3, &.{})));
+    try testing.expectEqual(@as(?Id, null), try C.authenticate(ctxWith(&st3, &.{})));
 }
 
 test "Composite: a hit on the first scheme stops (resolver consulted once per request)" {
     // Both schemes share one resolver. Cookie hits first, so the resolver must be
     // consulted exactly once — a second call would mean bearer was tried too.
-    var st = FakeState{ .credentials = .{ .known = "good", .uid = 9 } };
+    var st = FakeState{ .credentials = .{ .known = "good", .uid = idOf(9) } };
     const C = Composite(.{ cookie_scheme, bearer_scheme });
     const uid = try C.authenticate(ctxWith(&st, &.{ .{ "cookie", "session_id=good" }, .{ "authorization", "Bearer good" } }));
-    try testing.expectEqual(@as(?u64, 9), uid);
+    try testing.expectEqual(@as(?Id, idOf(9)), uid);
     try testing.expectEqual(@as(usize, 1), st.credentials.calls); // short-circuited before bearer
 }
 
@@ -254,9 +260,9 @@ test "Authenticated: no credential → 401, hit → principal with id+roles" {
     var anon = FakeState{};
     try testing.expectError(error.Unauthorized, Ext.fromRequestParts(ctxWith(&anon, &.{})));
 
-    var ok = FakeState{ .credentials = .{ .known = "good", .uid = 42 }, .roles = .{ .roles = &.{"editor"} } };
+    var ok = FakeState{ .credentials = .{ .known = "good", .uid = idOf(42) }, .roles = .{ .roles = &.{"editor"} } };
     const a = try Ext.fromRequestParts(ctxWith(&ok, &.{.{ "authorization", "Bearer good" }}));
-    try testing.expectEqual(@as(u64, 42), a.principal.id);
+    try testing.expectEqual(idOf(42), a.principal.id);
     try testing.expect(a.principal.hasRole("editor"));
 }
 
@@ -266,9 +272,9 @@ test "Optional: anonymous when absent, present when valid, IO propagates" {
     var anon = FakeState{};
     try testing.expect((try Ext.fromRequestParts(ctxWith(&anon, &.{}))).principal == null);
 
-    var ok = FakeState{ .credentials = .{ .known = "good", .uid = 3 } };
+    var ok = FakeState{ .credentials = .{ .known = "good", .uid = idOf(3) } };
     const some = try Ext.fromRequestParts(ctxWith(&ok, &.{.{ "cookie", "session_id=good" }}));
-    try testing.expectEqual(@as(u64, 3), some.principal.?.id);
+    try testing.expectEqual(idOf(3), some.principal.?.id);
 
     var broken = FakeState{ .credentials = .{ .io_error = true } };
     try testing.expectError(error.ConnectionLost, Ext.fromRequestParts(ctxWith(&broken, &.{.{ "cookie", "session_id=good" }})));
@@ -277,11 +283,11 @@ test "Optional: anonymous when absent, present when valid, IO propagates" {
 test "Require(Role): admin passes, non-admin 403, anonymous 401" {
     const Ext = Require(Composite(.{cookie_scheme}), Role("admin"));
 
-    var admin = FakeState{ .credentials = .{ .known = "good", .uid = 1 }, .roles = .{ .roles = &.{ "admin", "editor" } } };
+    var admin = FakeState{ .credentials = .{ .known = "good", .uid = idOf(1) }, .roles = .{ .roles = &.{ "admin", "editor" } } };
     const ok = try Ext.fromRequestParts(ctxWith(&admin, &.{.{ "cookie", "session_id=good" }}));
-    try testing.expectEqual(@as(u64, 1), ok.principal.id);
+    try testing.expectEqual(idOf(1), ok.principal.id);
 
-    var plain = FakeState{ .credentials = .{ .known = "good", .uid = 1 }, .roles = .{ .roles = &.{"editor"} } };
+    var plain = FakeState{ .credentials = .{ .known = "good", .uid = idOf(1) }, .roles = .{ .roles = &.{"editor"} } };
     try testing.expectError(error.Forbidden, Ext.fromRequestParts(ctxWith(&plain, &.{.{ "cookie", "session_id=good" }})));
 
     var anon = FakeState{};
@@ -292,12 +298,12 @@ test "CookieOnly vs BearerOnly: each accepts only its own channel" {
     const CookieOnly = Authenticated(Composite(.{cookie_scheme}));
     const BearerOnly = Authenticated(Composite(.{bearer_scheme}));
 
-    var st = FakeState{ .credentials = .{ .known = "good", .uid = 8 } };
+    var st = FakeState{ .credentials = .{ .known = "good", .uid = idOf(8) } };
     // CookieOnly ignores a bearer credential.
     try testing.expectError(error.Unauthorized, CookieOnly.fromRequestParts(ctxWith(&st, &.{.{ "authorization", "Bearer good" }})));
     // BearerOnly ignores a cookie credential.
     try testing.expectError(error.Unauthorized, BearerOnly.fromRequestParts(ctxWith(&st, &.{.{ "cookie", "session_id=good" }})));
     // Each accepts its own.
-    try testing.expectEqual(@as(u64, 8), (try CookieOnly.fromRequestParts(ctxWith(&st, &.{.{ "cookie", "session_id=good" }}))).principal.id);
-    try testing.expectEqual(@as(u64, 8), (try BearerOnly.fromRequestParts(ctxWith(&st, &.{.{ "authorization", "Bearer good" }}))).principal.id);
+    try testing.expectEqual(idOf(8), (try CookieOnly.fromRequestParts(ctxWith(&st, &.{.{ "cookie", "session_id=good" }}))).principal.id);
+    try testing.expectEqual(idOf(8), (try BearerOnly.fromRequestParts(ctxWith(&st, &.{.{ "authorization", "Bearer good" }}))).principal.id);
 }

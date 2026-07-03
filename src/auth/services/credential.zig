@@ -23,6 +23,7 @@
 //! Any `Repo` with `insert`/`resolve`/`deleteByHash` satisfies it.
 
 const std = @import("std");
+const Id = @import("../../db/id.zig").Id;
 
 /// Secret entropy: 256-bit, matching the exposure surface of a long-lived API
 /// token. Hex-encoded to a 64-char opaque token at issue.
@@ -57,7 +58,7 @@ pub fn CredentialStore(comptime Repo: type) type {
         /// session constant, or null for a token), so no untrusted value reaches
         /// the arithmetic. Returns the plaintext secret duplicated into `arena` —
         /// the only time it exists outside the holder.
-        pub fn issue(self: *Self, arena: std.mem.Allocator, user_id: u64, ttl: ?u64) ![]const u8 {
+        pub fn issue(self: *Self, arena: std.mem.Allocator, user_id: Id, ttl: ?u64) ![]const u8 {
             var raw: [secret_bytes]u8 = undefined;
             try self.io.randomSecure(&raw); // CSPRNG, always a syscall
             const secret = std.fmt.bytesToHex(raw, .lower); // [64]u8 by value
@@ -71,7 +72,7 @@ pub fn CredentialStore(comptime Repo: type) type {
         /// Resolve a presented secret to its `user_id`, or `null` if
         /// unknown/expired. Satisfies the resolver contract: `null` = unknown,
         /// `error` = real IO (never swallowed).
-        pub fn resolve(self: *Self, token: []const u8) !?u64 {
+        pub fn resolve(self: *Self, token: []const u8) !?Id {
             const hash = secretHash(token);
             return self.repo.resolve(&hash, self.nowSeconds());
         }
@@ -117,20 +118,20 @@ test "secretHash: deterministic, 64-char lower-hex, distinct per input" {
 /// expiry predicate (`expire_at == null or expire_at > now`).
 const FakeRepo = struct {
     hash: [64]u8 = undefined,
-    user_id: u64 = 0,
+    user_id: Id = .nil,
     issue_at: u64 = 0,
     expire_at: ?u64 = null,
     present: bool = false,
     io_error: bool = false,
 
-    fn insert(self: *FakeRepo, secret_hash: []const u8, user_id: u64, issue_at: u64, expire_at: ?u64) !void {
+    fn insert(self: *FakeRepo, secret_hash: []const u8, user_id: Id, issue_at: u64, expire_at: ?u64) !void {
         @memcpy(&self.hash, secret_hash);
         self.user_id = user_id;
         self.issue_at = issue_at;
         self.expire_at = expire_at;
         self.present = true;
     }
-    fn resolve(self: *FakeRepo, secret_hash: []const u8, now: u64) !?u64 {
+    fn resolve(self: *FakeRepo, secret_hash: []const u8, now: u64) !?Id {
         if (self.io_error) return error.ConnectionLost;
         if (!self.present or !std.mem.eql(u8, &self.hash, secret_hash)) return null;
         if (self.expire_at) |exp| if (exp <= now) return null;
@@ -149,7 +150,7 @@ test "issue stores the hash (not the plaintext) and stamps issue_at" {
     const arena = arena_state.allocator();
 
     var store = TestStore.init(testing.io, .{});
-    const secret = try store.issue(arena, 7, null);
+    const secret = try store.issue(arena, .fromInt(7), null);
 
     // The returned secret is the 64-char hex plaintext; the row holds its hash.
     try testing.expectEqual(@as(usize, 64), secret.len);
@@ -165,14 +166,14 @@ test "resolve: issued secret → uid; unknown/expired → null; IO error propaga
     const arena = arena_state.allocator();
 
     var store = TestStore.init(testing.io, .{});
-    const secret = try store.issue(arena, 42, 3600);
+    const secret = try store.issue(arena, .fromInt(42), 3600);
 
-    try testing.expectEqual(@as(?u64, 42), try store.resolve(secret));
-    try testing.expectEqual(@as(?u64, null), try store.resolve("some-other-secret"));
+    try testing.expectEqual(@as(?Id, Id.fromInt(42)), try store.resolve(secret));
+    try testing.expectEqual(@as(?Id, null), try store.resolve("some-other-secret"));
 
     // Expired: force the stored expiry into the past.
     store.repo.expire_at = 1;
-    try testing.expectEqual(@as(?u64, null), try store.resolve(secret));
+    try testing.expectEqual(@as(?Id, null), try store.resolve(secret));
 
     store.repo.expire_at = null; // back to never-expires
     store.repo.io_error = true;
@@ -185,9 +186,9 @@ test "revoke removes the credential (idempotent)" {
     const arena = arena_state.allocator();
 
     var store = TestStore.init(testing.io, .{});
-    const secret = try store.issue(arena, 9, null);
+    const secret = try store.issue(arena, .fromInt(9), null);
 
     try store.revoke(secret);
-    try testing.expectEqual(@as(?u64, null), try store.resolve(secret));
+    try testing.expectEqual(@as(?Id, null), try store.resolve(secret));
     try store.revoke(secret); // idempotent: revoking again is a no-op
 }

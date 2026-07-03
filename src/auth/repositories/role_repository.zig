@@ -8,6 +8,7 @@
 
 const std = @import("std");
 const mantle = @import("mantle");
+const Id = @import("../../db/id.zig").Id;
 
 const sql = struct {
     const roles_of = "SELECT role FROM roles WHERE user_id = ?";
@@ -29,7 +30,7 @@ pub const RoleRepository = struct {
     /// Snapshot a user's roles into `arena` (duplicated strings), so the slice
     /// stays valid for the whole request. Returns an empty slice for a user
     /// with no roles.
-    pub fn rolesOf(self: *RoleRepository, arena: std.mem.Allocator, user_id: u64) ![]const []const u8 {
+    pub fn rolesOf(self: *RoleRepository, arena: std.mem.Allocator, user_id: Id) ![]const []const u8 {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
 
