@@ -1,13 +1,13 @@
-//! Request-scope value type + log field formatting (std-only, unit-tested).
+//! Trace-context value type + log field formatting (std-only, unit-tested).
 //!
 //! Kept free of any zio dependency so it can be unit tested without a runtime.
-//! The task-local binding that carries a `RequestScope` across a request lives
-//! in `scope.zig`; the logFn reads it from there.
+//! The task-local binding that carries a `Context` across a task lives in
+//! `context.zig`; the logFn reads it from there.
 
 const std = @import("std");
 
-pub const RequestScope = struct {
-    request_id: []const u8,
+pub const Context = struct {
+    trace_id: []const u8,
 };
 
 /// Format `total_ms` (ms since Unix epoch) as ISO-8601 UTC, e.g.

@@ -29,9 +29,6 @@ test {
     // `wing`) but need no HTTP stack or database.
     _ = @import("openapi/root.zig");
 
-    // request-id tracing: std-only side registry + timestamp/level formatting.
-    _ = @import("trace/trace.zig");
-
     // catchAll maintenance middleware: bypass matching + 503 short-circuit,
     // driven by a fake ctx/next (no HTTP stack).
     _ = @import("middleware/maintenance.zig");

@@ -30,11 +30,26 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("mantle");
 
-    // UUIDv7 generator + Crockford Base32 for request ids (request_scope).
+    // UUIDv7 generator + Crockford Base32 for request ids; consumed only by
+    // the wing-trace middleware below.
     const uuid_mod = b.dependency("uuid", .{
         .target = target,
         .optimize = optimize,
     }).module("uuid");
+
+    // wing-trace (lib/wing-trace): task-scoped trace ids + trace-aware logging.
+    // Kept a plain module (not a package) so zio stays the single instance
+    // deduped through talon; promote to a path dependency when it moves to its
+    // own repository.
+    const wing_trace_mod = b.createModule(.{
+        .root_source_file = b.path("lib/wing-trace/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "zio", .module = zio_mod },
+            .{ .name = "uuid", .module = uuid_mod },
+        },
+    });
 
     const exe = b.addExecutable(.{
         .name = "wing_app",
@@ -47,7 +62,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "talon", .module = talon_mod },
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
-                .{ .name = "uuid", .module = uuid_mod },
+                .{ .name = "wing_trace", .module = wing_trace_mod },
             },
         }),
     });
@@ -71,7 +86,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "talon", .module = talon_mod },
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
-                .{ .name = "uuid", .module = uuid_mod },
+                .{ .name = "wing_trace", .module = wing_trace_mod },
             },
         }),
     });
@@ -95,4 +110,10 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_tests.step);
+
+    // wing-trace's tests need their own compile: test collection stops at
+    // module boundaries, so importing the module from tests.zig would not
+    // pick them up.
+    const trace_tests = b.addTest(.{ .root_module = wing_trace_mod });
+    test_step.dependOn(&b.addRunArtifact(trace_tests).step);
 }

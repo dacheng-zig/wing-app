@@ -9,7 +9,7 @@ const wing = @import("wing");
 const talon = @import("talon");
 
 const AppState = @import("state.zig").AppState;
-const request_scope = @import("middleware/request_scope.zig").request_scope;
+const request_id = @import("wing_trace").request_id;
 
 /// Map application errors to HTTP status codes, falling back to wing's
 /// defaults. `error.InvalidName` (raised by UserService) becomes 400.
@@ -22,7 +22,7 @@ fn errorStatus(err: anyerror) talon.http.Status {
 }
 
 pub const App = wing.App(AppState, .{
-    request_scope, // outermost: registers req id for all inner log lines
+    request_id, // outermost: registers request id for all inner log lines
     wing.middleware.logger,
     wing.middleware.recoverWith(errorStatus),
     wing.middleware.route_match,
