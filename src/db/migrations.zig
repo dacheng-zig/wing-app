@@ -19,4 +19,6 @@ pub const migrations = [_][]const u8{
     @embedFile("migrations/001_create_users.sql"),
     @embedFile("migrations/002_create_roles.sql"),
     @embedFile("migrations/003_create_credentials.sql"),
+    @embedFile("migrations/004_create_wing_jobs.sql"),
+    @embedFile("migrations/005_create_wing_schedules.sql"),
 };

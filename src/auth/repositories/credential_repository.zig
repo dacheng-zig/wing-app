@@ -19,6 +19,9 @@ const sql = struct {
     // expiry is checked against the caller's clock.
     const resolve = "SELECT user_id FROM credentials WHERE secret_hash = ? AND (expire_at IS NULL OR expire_at > ?)";
     const delete_by_hash = "DELETE FROM credentials WHERE secret_hash = ?";
+    // `expire_at` is epoch seconds; UNIX_TIMESTAMP() compares in the same unit
+    // regardless of session time zone.
+    const delete_expired = "DELETE FROM credentials WHERE expire_at IS NOT NULL AND expire_at < UNIX_TIMESTAMP() LIMIT ?";
 };
 
 /// Row shape for the credential resolve query (the CHAR(36) user_id
@@ -75,5 +78,20 @@ pub const CredentialRepository = struct {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
         _ = try db.conn.exec(self.gpa, sql.delete_by_hash, .{secret_hash});
+    }
+
+    /// Delete all rows past their `expire_at`, `limit` rows per statement
+    /// (batched to keep row locks short). Returns the total rows removed.
+    pub fn deleteExpired(self: *CredentialRepository, limit: u32) !u64 {
+        var db = try mantle.PooledConnection.acquire(self.pool);
+        defer db.release();
+
+        var total: u64 = 0;
+        while (true) {
+            const ok = try db.conn.exec(self.gpa, sql.delete_expired, .{limit});
+            total += ok.affected_rows;
+            if (ok.affected_rows < limit) break;
+        }
+        return total;
     }
 };

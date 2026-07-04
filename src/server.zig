@@ -13,6 +13,7 @@ const Config = @import("config/config.zig").Config;
 const AppState = @import("state.zig").AppState;
 const App = @import("app.zig").App;
 const routes = @import("routes/routes.zig");
+const job_registry = @import("jobs/registry.zig");
 
 /// Watch for SIGINT and trigger a graceful server drain.
 fn signalWatcher(server: *talon.http.Server(App)) !void {
@@ -55,6 +56,15 @@ pub fn run(init: std.process.Init) !void {
     // table. Runs inside the runtime; a DB failure here aborts startup.
     try state.migrate();
 
+    // Background job runner: shares the DB pool and the zio scheduler with
+    // HTTP. Declared before `group` so its deinit runs after `group.cancel()`
+    // has stopped the coroutines, and before `state.deinit()` drops the pool.
+    var job_runner: ?job_registry.JobRunner = if (config.jobs.enabled)
+        try job_registry.JobRunner.init(gpa, state.database.pool, config.jobs, config.db.pool_size)
+    else
+        null;
+    defer if (job_runner) |*r| r.deinit();
+
     var app = App.init(&router, &state);
 
     const addr = try zio.net.IpAddress.parseIp4(config.host, config.port);
@@ -72,6 +82,7 @@ pub fn run(init: std.process.Init) !void {
     var group: zio.Group = .init;
     defer group.cancel();
     try group.spawn(signalWatcher, .{&server});
+    if (job_runner) |*r| try group.spawn(job_registry.JobRunner.run, .{r});
 
     std.log.info("wing-app listening on http://{f} (Ctrl+C to stop)", .{addr});
     try server.serve(&listener);

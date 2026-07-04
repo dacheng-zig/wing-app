@@ -75,6 +75,23 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    // wing-jobs (lib/wing-jobs): MySQL-backed job queue + cron scheduling.
+    // Same plain-module arrangement as the other lib modules (zio/mantle stay
+    // single deduped instances); promote to a path dependency when it moves
+    // to its own repository. Its tables' DDL lives with the app's migrations
+    // (src/db/migrations/).
+    const wing_jobs_mod = b.createModule(.{
+        .root_source_file = b.path("lib/wing-jobs/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "zio", .module = zio_mod },
+            .{ .name = "mantle", .module = mantle_mod },
+            .{ .name = "wing_id", .module = wing_id_mod },
+            .{ .name = "wing_trace", .module = wing_trace_mod },
+        },
+    });
+
     const exe = b.addExecutable(.{
         .name = "wing_app",
         .root_module = b.createModule(.{
@@ -90,6 +107,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "wing_id", .module = wing_id_mod },
                 .{ .name = "wing_trace", .module = wing_trace_mod },
                 .{ .name = "wing_openapi", .module = wing_openapi_mod },
+                .{ .name = "wing_jobs", .module = wing_jobs_mod },
             },
         }),
     });
@@ -117,6 +135,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "uuid", .module = uuid_mod },
                 .{ .name = "wing_openapi", .module = wing_openapi_mod },
                 .{ .name = "wing_id", .module = wing_id_mod },
+                .{ .name = "wing_jobs", .module = wing_jobs_mod },
             },
         }),
     });
@@ -124,7 +143,9 @@ pub fn build(b: *std.Build) void {
     const openapi_step = b.step("openapi", "Print the assembled OpenAPI 3.1 spec to stdout");
     openapi_step.dependOn(&openapi_run.step);
 
-    // Unit tests: the dependency-free auth units (see src/tests.zig).
+    // Unit tests: the dependency-free auth units (see src/tests.zig). `mantle`
+    // is needed by the jobs compile-coverage block (refAllDeclsRecursive over
+    // the registry/runner generics), not by any runtime test.
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/tests.zig"),
@@ -132,9 +153,15 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "wing", .module = wing_mod },
+                .{ .name = "mantle", .module = mantle_mod },
+                .{ .name = "zio", .module = zio_mod },
+                // Needed by the jobs compile-coverage block: analyzing the
+                // runner pulls in its wing_trace import.
                 .{ .name = "uuid", .module = uuid_mod },
-                .{ .name = "wing_openapi", .module = wing_openapi_mod },
                 .{ .name = "wing_id", .module = wing_id_mod },
+                .{ .name = "wing_trace", .module = wing_trace_mod },
+                .{ .name = "wing_openapi", .module = wing_openapi_mod },
+                .{ .name = "wing_jobs", .module = wing_jobs_mod },
             },
         }),
     });
@@ -153,4 +180,7 @@ pub fn build(b: *std.Build) void {
 
     const id_tests = b.addTest(.{ .root_module = wing_id_mod });
     test_step.dependOn(&b.addRunArtifact(id_tests).step);
+
+    const jobs_tests = b.addTest(.{ .root_module = wing_jobs_mod });
+    test_step.dependOn(&b.addRunArtifact(jobs_tests).step);
 }

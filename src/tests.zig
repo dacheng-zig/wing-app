@@ -37,4 +37,27 @@ test {
 
     // fd-limit admission policy: pure arithmetic (floor/ceiling/reserve).
     _ = @import("fd_limit.zig");
+
+    // jobs: the DB-backed runner and scheduler need MySQL, so they get
+    // compile coverage only: instantiating the app's registry/runner generics
+    // and referencing every public decl typechecks code paths `zig build`'s
+    // lazy analysis would skip.
+    comptime {
+        const job_registry = @import("jobs/registry.zig");
+        const jobs = @import("wing_jobs");
+        // Taking a function's address forces full analysis of its body (and
+        // transitively of everything it calls: producer/worker/rescuer,
+        // scheduler tick/fire, rescue/prune SQL generation, dispatch of every
+        // registered kind).
+        _ = &job_registry.JobRunner.init;
+        _ = &job_registry.JobRunner.deinit;
+        _ = &job_registry.JobRunner.run;
+        _ = &job_registry.JobRegistry.dispatch;
+        _ = &job_registry.JobRegistry.timeoutFor;
+        _ = &jobs.Repository.insert;
+        _ = &jobs.Repository.claim;
+        _ = &jobs.Repository.cancelPending;
+        _ = &jobs.Repository.queueStats;
+        _ = &jobs.Repository.scheduleStats;
+    }
 }

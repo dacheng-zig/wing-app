@@ -12,6 +12,7 @@ const AppState = @import("../state.zig").AppState;
 const Ctx = @import("../state.zig").Ctx;
 const home = @import("../handlers/home.zig");
 const health = @import("../handlers/health.zig");
+const jobs_stats = @import("../handlers/jobs_stats.zig");
 const user_routes = @import("../user/routes/user_routes.zig");
 const auth_routes = @import("../auth/routes/auth_routes.zig");
 
@@ -44,6 +45,7 @@ pub fn build(gpa: std.mem.Allocator) !Built {
     var ops = openapi.Router(AppState).init(gpa);
     defer ops.deinit();
     try ops.get("/health", health.handle, .{ .summary = "Health check", .tags = &.{"ops"} });
+    try ops.get("/internal/jobs/stats", jobs_stats.handle, .{ .summary = "Job queue stats", .tags = &.{"ops"} });
 
     // Docs feature: spec endpoint + Scalar page (hidden; root-level → merged).
     var docs = try openapi.docsRoutes(AppState, gpa);

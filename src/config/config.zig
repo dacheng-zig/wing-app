@@ -26,11 +26,17 @@ pub const Db = struct {
     pool_size: usize = 8,
 };
 
+/// Background job runner knobs. The struct (and its defaults — domain policy)
+/// lives with the jobs module; this config only maps `JOBS_*` env vars onto
+/// it. Std-only on both sides, so embedding pulls in no runtime deps.
+pub const Jobs = @import("wing_jobs").Config;
+
 pub const Config = struct {
     host: []const u8 = "127.0.0.1",
     port: u16 = 8080,
     greeting: []const u8 = "Hello, world!",
     db: Db = .{},
+    jobs: Jobs = .{},
 
     /// Build config from defaults, overriding from the environment.
     ///
@@ -56,6 +62,29 @@ pub const Config = struct {
             if (std.fmt.parseInt(usize, v, 10)) |n| {
                 if (n != 0) cfg.db.pool_size = n;
             } else |_| {}
+        }
+        if (env.get("JOBS_ENABLED")) |v| {
+            cfg.jobs.enabled = !(std.mem.eql(u8, v, "0") or std.mem.eql(u8, v, "false") or
+                std.mem.eql(u8, v, "off") or std.mem.eql(u8, v, "no"));
+        }
+        if (env.get("JOBS_WORKERS")) |v| {
+            if (std.fmt.parseInt(u16, v, 10)) |n| {
+                if (n != 0) cfg.jobs.workers = n;
+            } else |_| {}
+        }
+        inline for (.{
+            .{ "JOBS_POLL_INTERVAL", "poll_interval_s" },
+            .{ "JOBS_TICK_INTERVAL", "tick_interval_s" },
+            .{ "JOBS_RESCUE_AFTER", "rescue_after_s" },
+            .{ "JOBS_RESCUE_INTERVAL", "rescue_interval_s" },
+            .{ "JOBS_RETENTION_COMPLETED", "retention_completed_s" },
+            .{ "JOBS_RETENTION_DISCARDED", "retention_discarded_s" },
+        }) |knob| {
+            if (env.get(knob[0])) |v| {
+                if (std.fmt.parseInt(u32, v, 10)) |n| {
+                    if (n != 0) @field(cfg.jobs, knob[1]) = n;
+                } else |_| {}
+            }
         }
         return cfg;
     }
