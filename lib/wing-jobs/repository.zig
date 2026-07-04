@@ -12,8 +12,7 @@ const std = @import("std");
 const mantle = @import("mantle");
 const clock = @import("clock.zig");
 const model = @import("model.zig");
-const id_mod = @import("wing_id");
-const Id = id_mod.Id;
+const Id = @import("wing_id").Id;
 
 /// MySQL ER_DUP_ENTRY: unique-index collision, used for job dedupe.
 const er_dup_entry = 1062;
@@ -176,7 +175,7 @@ pub const Repository = struct {
     /// The id is minted here (UUIDv7); returns it, or `error.DuplicateJob`
     /// on a unique collision.
     pub fn insertOn(gpa: std.mem.Allocator, conn: *mantle.Connection, job: NewJob) !Id {
-        const new_id = id_mod.new();
+        const new_id = Id.new();
         const keep: u8 = @intFromBool(job.unique_keep);
         const result = if (job.unique_key) |key|
             (if (job.at) |at|
@@ -254,7 +253,7 @@ pub const Repository = struct {
             // Safe to splice into statement text: the value round-tripped
             // through Id during the scan, so only hex and hyphens can appear
             // — no quoting hazard.
-            try update.writer.print("{s}'{s}'", .{ if (i == 0) "" else ",", &id_mod.toText(row.id) });
+            try update.writer.print("{s}'{s}'", .{ if (i == 0) "" else ",", &row.id.toText() });
         }
         try update.writer.writeByte(')');
         try tx.conn.execSimple(self.gpa, update.written());
@@ -389,7 +388,7 @@ pub const Repository = struct {
     pub fn ensureSchedule(self: *Repository, key: []const u8, next_at: []const u8) !void {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
-        const new_id = id_mod.new();
+        const new_id = Id.new();
         _ = try db.conn.exec(self.gpa, sql.ensure_schedule, .{ new_id, key, next_at });
     }
 

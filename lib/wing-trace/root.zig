@@ -10,7 +10,7 @@
 //! HTTP requests bind via the `request_id` middleware (a drop-in for
 //! `wing.middleware.request_id`); background jobs bind directly with
 //! `bind`/`unbind` around each execution. Deps: `zio` (context binding),
-//! `uuid` (middleware only).
+//! `wing_id` (middleware only — request ids come from `Id.new`).
 
 const trace = @import("trace.zig");
 const context = @import("context.zig");

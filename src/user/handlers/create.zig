@@ -12,7 +12,6 @@ const UserService = @import("../services/user_service.zig").UserService;
 const User = @import("../models/user.zig").User;
 const Database = @import("../../db/database.zig").Database;
 const job_registry = @import("../../jobs/registry.zig");
-const id_mod = @import("wing_id");
 
 const log = std.log.scoped(.users);
 
@@ -24,7 +23,7 @@ pub const Request = struct {
 
 pub fn handle(ctx: *Ctx, svc: *UserService, db: *Database, body: wing.Json(Request)) anyerror!wing.Created(User) {
     const user = try svc.register(ctx.arena, body.value.name, body.value.username, body.value.password);
-    const id_text = id_mod.toText(user.id);
+    const id_text = user.id.toText();
 
     // Hand the slow part (email) to the job queue; the response doesn't wait.
     // Fire-and-forget: a failed enqueue logs but doesn't undo a successful

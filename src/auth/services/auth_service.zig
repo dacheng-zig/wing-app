@@ -12,8 +12,7 @@
 const std = @import("std");
 const zio = @import("zio");
 const UserRepository = @import("../../user/repositories/user_repository.zig").UserRepository;
-const id_mod = @import("wing_id");
-const Id = id_mod.Id;
+const Id = @import("wing_id").Id;
 const password = @import("../support/password.zig");
 
 const log = std.log.scoped(.auth);
@@ -48,7 +47,7 @@ pub const AuthService = struct {
         // it is logged and swallowed, not propagated.
         if (password.needsRehash(cred.password_hash))
             self.rehash(arena, cred.id, plain) catch |err| {
-                const id_text = id_mod.toText(cred.id);
+                const id_text = cred.id.toText();
                 log.warn("rehash-on-login failed for user {s}: {t}", .{ &id_text, err });
             };
 

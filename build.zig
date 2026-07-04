@@ -30,8 +30,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("mantle");
 
-    // UUIDv7: entity ids (via wing-id) and, via wing-trace, Crockford Base32
-    // request ids.
+    // UUIDv7 primitives; consumed only by wing-id (entity ids, request ids).
     const uuid_mod = b.dependency("uuid", .{
         .target = target,
         .optimize = optimize,
@@ -51,14 +50,14 @@ pub fn build(b: *std.Build) void {
     // wing-trace (lib/wing-trace): task-scoped trace ids + trace-aware logging.
     // Kept a plain module (not a package) so zio stays the single instance
     // deduped through talon; promote to a path dependency when it moves to its
-    // own repository.
+    // own repository (wing-id goes with it: request ids come from Id.new).
     const wing_trace_mod = b.createModule(.{
         .root_source_file = b.path("lib/wing-trace/root.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
             .{ .name = "zio", .module = zio_mod },
-            .{ .name = "uuid", .module = uuid_mod },
+            .{ .name = "wing_id", .module = wing_id_mod },
         },
     });
 
@@ -108,7 +107,6 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "talon", .module = talon_mod },
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
-                .{ .name = "uuid", .module = uuid_mod },
                 .{ .name = "wing_id", .module = wing_id_mod },
                 .{ .name = "wing_trace", .module = wing_trace_mod },
                 .{ .name = "wing_openapi", .module = wing_openapi_mod },
@@ -138,7 +136,6 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
                 .{ .name = "wing_trace", .module = wing_trace_mod },
-                .{ .name = "uuid", .module = uuid_mod },
                 .{ .name = "wing_openapi", .module = wing_openapi_mod },
                 .{ .name = "wing_id", .module = wing_id_mod },
                 .{ .name = "wing_jobs", .module = wing_jobs_mod },
@@ -163,7 +160,6 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "zio", .module = zio_mod },
                 // Needed by the jobs compile-coverage block: analyzing the
                 // runner pulls in its wing_trace import.
-                .{ .name = "uuid", .module = uuid_mod },
                 .{ .name = "wing_id", .module = wing_id_mod },
                 .{ .name = "wing_trace", .module = wing_trace_mod },
                 .{ .name = "wing_openapi", .module = wing_openapi_mod },

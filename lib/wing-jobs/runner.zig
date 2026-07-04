@@ -18,7 +18,7 @@ const model = @import("model.zig");
 const repository = @import("repository.zig");
 const scheduler = @import("scheduler.zig");
 const wing_trace = @import("wing_trace");
-const id_mod = @import("wing_id");
+const Id = @import("wing_id").Id;
 
 const log = std.log.scoped(.jobs);
 
@@ -194,12 +194,16 @@ pub fn Runner(comptime Registry: type, comptime user_schedules: []const jobs.Sch
             var arena_inst = std.heap.ArenaAllocator.init(self.gpa);
             defer arena_inst.deinit();
 
-            // Every log line inside the job carries the job's id as trace_id,
-            // same channel request logs use.
-            const job_id_text = id_mod.toText(job.id);
+            // Each execution gets a fresh trace id, same shape and source as
+            // request ids — one attempt = one trace, so retries don't share a
+            // prefix. The job's own id goes into message text in canonical
+            // 36-char form instead (finalize lines carry both), so a logged
+            // id can be pasted straight into a WHERE clause.
+            const trace_id_text = Id.new().toBase32();
             var binding: wing_trace.Binding = .unset;
-            wing_trace.bind(&binding, .{ .trace_id = &job_id_text });
+            wing_trace.bind(&binding, .{ .trace_id = &trace_id_text });
             defer wing_trace.unbind(&binding);
+            const job_id_text = job.id.toText();
 
             var ctx: jobs.Context = .{
                 .gpa = self.gpa,
@@ -260,7 +264,7 @@ pub fn Runner(comptime Registry: type, comptime user_schedules: []const jobs.Sch
         }
 
         fn finalize(self: *Self, job: *const model.ClaimedJob, action: Action) !void {
-            const id_text = id_mod.toText(job.id);
+            const id_text = job.id.toText();
             switch (action) {
                 .complete => {
                     try self.repo.complete(job.id);

@@ -10,8 +10,7 @@
 
 const std = @import("std");
 const mantle = @import("mantle");
-const id_mod = @import("wing_id");
-const Id = id_mod.Id;
+const Id = @import("wing_id").Id;
 
 const sql = struct {
     const insert = "INSERT INTO credentials (credential_id, secret_hash, user_id, issue_at, expire_at) VALUES (?, ?, ?, ?, ?)";
@@ -50,7 +49,7 @@ pub const CredentialRepository = struct {
     ) !void {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
-        _ = try db.conn.exec(self.gpa, sql.insert, .{ id_mod.new(), secret_hash, user_id, issue_at, expire_at });
+        _ = try db.conn.exec(self.gpa, sql.insert, .{ Id.new(), secret_hash, user_id, issue_at, expire_at });
     }
 
     /// Resolve a non-expired credential to its `user_id`; `null` if absent or

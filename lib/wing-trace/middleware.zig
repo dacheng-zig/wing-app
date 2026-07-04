@@ -10,44 +10,23 @@
 //! The ctx is duck-typed (`anytype`): anything with `arena`, `request_id`,
 //! and `addHeader` works — no dependency on the wing framework itself.
 //!
-//! The id is a UUIDv7 rendered as 26-char Crockford Base32: a 48-bit
-//! millisecond timestamp followed by a monotonic counter, so ids sort by
-//! creation order and stay unique within the process. A single-executor
-//! runtime means this middleware never runs on two threads at once, so the
-//! generator and its RNG need no locking.
+//! The id is a UUIDv7 from wing-id's process-wide generator (`Id.new`),
+//! rendered as 26-char Crockford Base32 (`toBase32`): sortable by creation
+//! order, unique within the process, and drawn from the same sequence as
+//! entity ids. Generation and rendering live in wing-id — this middleware
+//! only binds the result.
 //!
 //! Must sit at the FRONT of the chain, before the access logger: the logger
 //! emits its access line after `next` returns, so the binding has to still be
 //! live at that point — i.e. this middleware must be the outer one.
 
 const std = @import("std");
-const uuid = @import("uuid");
+const Id = @import("wing_id").Id;
 const context = @import("context.zig");
 
 pub const request_id = struct {
-    var gen: uuid.V7Generator(.{}) = .empty;
-    var prng: std.Random.DefaultPrng = .init(0);
-    var seeded = false;
-
     pub fn run(ctx: anytype, next: anytype) anyerror!void {
-        // Wall clock via the same always-available io std's default logger uses
-        // (mirrors log.zig); these are synchronous syscalls, no scheduler
-        // yield.
-        const now = std.Io.Clock.now(.real, std.Options.debug_io);
-
-        // Seed the RNG once from nanosecond entropy on first use. Uniqueness is
-        // guaranteed by the monotonic counter regardless of the RNG; the seed
-        // only keeps the random low bits unpredictable across restarts. No guard
-        // needed on the single executor.
-        if (!seeded) {
-            prng = .init(@truncate(@as(u96, @bitCast(now.toNanoseconds()))));
-            seeded = true;
-        }
-
-        // Clamp a pre-1970 clock to 0 instead of tripping the @intCast safety
-        // check — same policy as trace.formatTimestamp.
-        const ms: u48 = @intCast(@max(now.toMilliseconds(), 0));
-        const text = uuid.base32.toBase32(gen.next(prng.random(), ms));
+        const text = Id.new().toBase32();
         // Copy off this frame: the header and binding outlive `next`, and the
         // response is written further up the stack after `run` returns.
         const buf = try ctx.arena.dupe(u8, &text);

@@ -8,5 +8,4 @@
 - strong and generic ID type for global use: primary / foreign key (可解决id错误赋值引发的bug：如把 user id 赋值给 order id)
 - [ ] form validation / validators component
 - wing-app 版本升级，用户 clone 后进行业务开发后，如何安全得获取上游更新
-- use uuid for all primary / foreign keys
 - wing-app 需要一个响当当的项目名字

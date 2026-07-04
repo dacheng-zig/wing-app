@@ -17,8 +17,7 @@
 const std = @import("std");
 const mantle = @import("mantle");
 const User = @import("../models/user.zig").User;
-const id_mod = @import("wing_id");
-const Id = id_mod.Id;
+const Id = @import("wing_id").Id;
 
 const sql = struct {
     const insert = "INSERT INTO users (id, name, username, password_hash) VALUES (?, ?, ?, ?)";
@@ -78,7 +77,7 @@ pub const UserRepository = struct {
         var db = try mantle.PooledConnection.acquire(self.pool);
         defer db.release();
 
-        const new_id = id_mod.new();
+        const new_id = Id.new();
         _ = db.conn.exec(self.gpa, sql.insert, .{ new_id, name, username, password_hash }) catch |err| {
             // A duplicate username is a client error (409), not a server fault.
             if (err == error.ServerError) {
