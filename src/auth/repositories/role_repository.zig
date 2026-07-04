@@ -8,7 +8,7 @@
 
 const std = @import("std");
 const mantle = @import("mantle");
-const Id = @import("../../db/id.zig").Id;
+const Id = @import("wing_id").Id;
 
 const sql = struct {
     const roles_of = "SELECT role FROM roles WHERE user_id = ?";

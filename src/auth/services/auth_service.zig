@@ -12,7 +12,7 @@
 const std = @import("std");
 const zio = @import("zio");
 const UserRepository = @import("../../user/repositories/user_repository.zig").UserRepository;
-const id_mod = @import("../../db/id.zig");
+const id_mod = @import("wing_id");
 const Id = id_mod.Id;
 const password = @import("../support/password.zig");
 

@@ -12,7 +12,7 @@
 //! rework later (YAGNI).
 
 const std = @import("std");
-const Id = @import("../../db/id.zig").Id;
+const Id = @import("wing_id").Id;
 
 pub const Principal = struct {
     id: Id,

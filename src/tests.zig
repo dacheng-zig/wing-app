@@ -11,8 +11,9 @@
 //! the security-critical auth logic.
 
 test {
-    // Entity ids: UUIDv7 mint + text/column round-trips (pure, no DB).
-    _ = @import("db/id.zig");
+    // Entity ids (lib/wing-id) and the jobs pure layer (lib/wing-jobs) live in
+    // their own modules and get their own test compiles in build.zig — test
+    // collection stops at module boundaries.
 
     _ = @import("auth/models/principal.zig");
     _ = @import("auth/support/password.zig");

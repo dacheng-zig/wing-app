@@ -30,12 +30,23 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("mantle");
 
-    // UUIDv7: entity ids (db/id.zig) and, via wing-trace, Crockford Base32
+    // UUIDv7: entity ids (via wing-id) and, via wing-trace, Crockford Base32
     // request ids.
     const uuid_mod = b.dependency("uuid", .{
         .target = target,
         .optimize = optimize,
     }).module("uuid");
+
+    // wing-id (lib/wing-id): UUIDv7 entity ids with the mantle/json/openapi
+    // codec conventions.
+    const wing_id_mod = b.createModule(.{
+        .root_source_file = b.path("lib/wing-id/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "uuid", .module = uuid_mod },
+        },
+    });
 
     // wing-trace (lib/wing-trace): task-scoped trace ids + trace-aware logging.
     // Kept a plain module (not a package) so zio stays the single instance
@@ -75,8 +86,9 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "talon", .module = talon_mod },
                 .{ .name = "zio", .module = zio_mod },
                 .{ .name = "mantle", .module = mantle_mod },
-                .{ .name = "wing_trace", .module = wing_trace_mod },
                 .{ .name = "uuid", .module = uuid_mod },
+                .{ .name = "wing_id", .module = wing_id_mod },
+                .{ .name = "wing_trace", .module = wing_trace_mod },
                 .{ .name = "wing_openapi", .module = wing_openapi_mod },
             },
         }),
@@ -104,6 +116,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "wing_trace", .module = wing_trace_mod },
                 .{ .name = "uuid", .module = uuid_mod },
                 .{ .name = "wing_openapi", .module = wing_openapi_mod },
+                .{ .name = "wing_id", .module = wing_id_mod },
             },
         }),
     });
@@ -121,6 +134,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "wing", .module = wing_mod },
                 .{ .name = "uuid", .module = uuid_mod },
                 .{ .name = "wing_openapi", .module = wing_openapi_mod },
+                .{ .name = "wing_id", .module = wing_id_mod },
             },
         }),
     });
@@ -136,4 +150,7 @@ pub fn build(b: *std.Build) void {
 
     const openapi_tests = b.addTest(.{ .root_module = wing_openapi_mod });
     test_step.dependOn(&b.addRunArtifact(openapi_tests).step);
+
+    const id_tests = b.addTest(.{ .root_module = wing_id_mod });
+    test_step.dependOn(&b.addRunArtifact(id_tests).step);
 }

@@ -8,10 +8,10 @@ const wing = @import("wing");
 
 const Ctx = @import("../../state.zig").Ctx;
 const Auth = @import("../support/auth.zig").Auth;
-const Id = @import("../../db/id.zig").Id;
+const Id = @import("wing_id").Id;
 
 /// Shape returned by `GET /me`. `Id` serializes as canonical UUID text
-/// (see db/id.zig).
+/// (see lib/wing-id).
 pub const Response = struct {
     id: Id,
     name: []const u8,

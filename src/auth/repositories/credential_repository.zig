@@ -10,7 +10,7 @@
 
 const std = @import("std");
 const mantle = @import("mantle");
-const id_mod = @import("../../db/id.zig");
+const id_mod = @import("wing_id");
 const Id = id_mod.Id;
 
 const sql = struct {

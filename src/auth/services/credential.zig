@@ -23,7 +23,7 @@
 //! Any `Repo` with `insert`/`resolve`/`deleteByHash` satisfies it.
 
 const std = @import("std");
-const Id = @import("../../db/id.zig").Id;
+const Id = @import("wing_id").Id;
 
 /// Secret entropy: 256-bit, matching the exposure surface of a long-lived API
 /// token. Hex-encoded to a 64-char opaque token at issue.

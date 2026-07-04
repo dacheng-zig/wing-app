@@ -9,7 +9,7 @@ const std = @import("std");
 const zio = @import("zio");
 const UserRepository = @import("../repositories/user_repository.zig").UserRepository;
 const User = @import("../models/user.zig").User;
-const Id = @import("../../db/id.zig").Id;
+const Id = @import("wing_id").Id;
 const password = @import("../../auth/support/password.zig");
 
 pub const UserService = struct {

@@ -76,7 +76,7 @@ pub const Id = extern struct {
         return parse(raw);
     }
 
-    /// OpenAPI wire shape (see openapi/schema.zig): custom `jsonStringify`
+    /// OpenAPI wire shape (see lib/wing-openapi/schema.zig): custom `jsonStringify`
     /// means field reflection would document a shape that never appears on
     /// the wire, so the schema is declared alongside it.
     pub const openapi_type = "string";

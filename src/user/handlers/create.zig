@@ -10,7 +10,7 @@ const wing = @import("wing");
 const Ctx = @import("../../state.zig").Ctx;
 const UserService = @import("../services/user_service.zig").UserService;
 const User = @import("../models/user.zig").User;
-const id_mod = @import("../../db/id.zig");
+const id_mod = @import("wing_id");
 
 pub const Request = struct {
     name: []const u8,

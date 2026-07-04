@@ -4,7 +4,7 @@
 //! `pub fn authenticate(ctx) !?Id`:
 //!   - `null`  ⟹ no identity from this scheme (credential absent, OR present
 //!               but invalid — forged/expired).
-//!   - `Id`    ⟹ a resolved uid (UUIDv7, see db/id.zig).
+//!   - `Id`    ⟹ a resolved uid (UUIDv7, see lib/wing-id).
 //!   - `error` ⟹ a real IO error (resolver DB failure, ...) — never swallowed.
 //!
 //! `Token(Locator, resolver_field, doc)` binds axis A (a Locator, see locate.zig)
@@ -24,7 +24,7 @@
 
 const std = @import("std");
 const Principal = @import("../models/principal.zig").Principal;
-const Id = @import("../../db/id.zig").Id;
+const Id = @import("wing_id").Id;
 const SecurityScheme = @import("wing_openapi").SecurityScheme;
 
 /// Token-class scheme = a Locator × a resolver field. `doc` is this scheme's
