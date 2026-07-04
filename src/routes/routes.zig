@@ -65,7 +65,7 @@ pub fn build(gpa: std.mem.Allocator) !Built {
 
     const openapi_spec = try root.openApiJson(gpa, .{
         .title = "Wing App API",
-        .version = "0.0.0",
+        .version = "0.1.0",
         .summary = "Layered HTTP API on the wing framework (Zig 0.16).",
         .description =
         \\Demonstrates a layered wing application: typed extractors, AppState
