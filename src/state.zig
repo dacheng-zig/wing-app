@@ -25,12 +25,10 @@ const RoleRepository = @import("auth/repositories/role_repository.zig").RoleRepo
 const Authorizer = @import("auth/support/authorizer.zig").Authorizer;
 const AuthService = @import("auth/services/auth_service.zig").AuthService;
 
-/// Wraps the assembled OpenAPI spec so it projects unambiguously by type
-/// (a bare `[]const u8` field would collide with any future string field).
-/// The bytes are owned by the server (app lifetime); filled after startup.
-pub const ApiDocs = struct {
-    spec: []const u8 = "",
-};
+/// Assembled OpenAPI spec wrapper (see lib/wing-openapi/serve.zig). Re-exported so
+/// the `api_docs` field and the package's `/openapi.json` handler share one
+/// type — wing's by-type projection requires identity, not shape.
+pub const ApiDocs = @import("wing_openapi").ApiDocs;
 
 pub const AppState = struct {
     config: Config,

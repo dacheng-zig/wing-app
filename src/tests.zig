@@ -27,10 +27,8 @@ test {
     // App auth assembly: the single declaration of the default channel chain.
     _ = @import("auth/support/auth.zig");
 
-    // openapi package: identity/classification/schema/assembly units. These
-    // reflect over wing's public extractor types (the test module imports
-    // `wing`) but need no HTTP stack or database.
-    _ = @import("openapi/root.zig");
+    // openapi package tests live in lib/wing-openapi and get their own test compile
+    // in build.zig (test collection stops at module boundaries).
 
     // catchAll maintenance middleware: bypass matching + 503 short-circuit,
     // driven by a fake ctx/next (no HTTP stack).

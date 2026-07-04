@@ -1,6 +1,6 @@
 # wing-app OpenAPI：集成与使用指南
 
-> 受众：在 wing 应用里想自动生成接口文档的开发者（API 使用方，非 `openapi` 包维护者）。
+> 受众：在 wing 应用里想自动生成接口文档的开发者（API 使用方，非 `wing-openapi` 包维护者）。
 > 一句话：把 `wing.Router` 换成 `openapi.Router`，每条路由末尾加一个文档参数，spec 与 Scalar 页面就自动有了——schema 全部从 handler 签名推导，零手写。
 > 配套：架构与缺口见 `openapi-developer-guide.md`。
 
@@ -24,7 +24,7 @@
 
 ```zig
 // src/user/routes/user_routes.zig
-const openapi = @import("../../openapi/root.zig");
+const openapi = @import("wing_openapi");
 const AppState = @import("../../state.zig").AppState;
 const user_controller = @import("../controllers/user_controller.zig");
 
@@ -109,19 +109,24 @@ return .{ .router = root.intoRouter(), .openapi_spec = openapi_spec };
 
 > 内存须知：`openapi.Router` 比 `wing.Router` 多持有 docs 列表 + path arena，**被 `nest`/`merge` move 之后仍要 `deinit`**——所以子路由用 `defer`（非 `errdefer`）。spec bytes 归调用方所有，server 在 shutdown 释放。
 
-### 第 4 步：把 spec 存进 AppState，注册两个端点
+### 第 4 步：把 spec 存进 AppState，合入 serve 层
 
 ```zig
+// AppState 内嵌包提供的 ApiDocs（类型同一才能被 wing 按类型投影）
+pub const ApiDocs = @import("wing_openapi").ApiDocs;
+// ...
+api_docs: ApiDocs = .{},
+
 // 存 spec（src/server.zig）
 state.api_docs.spec = built.openapi_spec;
 
-// docs feature 的两个端点都标 hidden（自身不进文档）
-// src/docs/routes/docs_routes.zig
-try r.get("/openapi.json", docs_controller.openapiJson, .{ .hidden = true });
-try r.get("/docs",         docs_controller.docsPage,    .{ .hidden = true });
+// 两个端点由包内置（lib/wing-openapi/serve.zig），都标 hidden（自身不进文档）
+var docs = try openapi.docsRoutes(AppState, gpa);
+defer docs.deinit();
+try root.merge(&docs);
 ```
 
-controller 直接 serve 静态字节（`src/docs/controllers/docs_controller.zig`）：`/openapi.json` 回 `state.api_docs.spec`、`/docs` 回 `@embedFile` 的 `scalar.html`，各自设好 content-type。
+serve 层直接回静态字节：`/openapi.json` 回 `state.api_docs.spec`、`/docs` 回 `@embedFile` 的 `scalar.html`，各自设好 content-type。
 
 ### 第 5 步：验证
 
@@ -156,7 +161,7 @@ zig build run                        # 启动后浏览器开 http://<host>:<port
 - **登录要求会自动体现**：handler 声明 `Auth`/`OptionalAuth`/`Require(...)` 的接口（如 `/api/v1/auth/me`）会自动带 `security`，Scalar 上显示锁图标——无需手写。但 **`RequireRole("admin")` 的具体角色暂不进 spec**（只体现"需登录"），角色要求请在 `description` 里说明（P2 再自动化）。
 - **只有成功响应**：每个接口只展示 200/201/302，**不含**错误响应（401/404/422 等）。
 - **schema 名较长**：components 用全限定类型名（如 `user.models.user.User`），UI 里偏冗长，暂不可自定义。
-- **`/docs` 需联网**：Scalar 通过 CDN 加载，离线/内网环境页面渲染不出（`/openapi.json` 本身不受影响，仍可用其它工具打开）。
+- **`/docs` 已本地化，字体除外**：Scalar UI 脚本已 vendor 到 `assets/scalar-api-reference.js`（锁定 `@scalar/api-reference@1.62.4`），经 `/docs/scalar.js` 提供，页面本身无需联网。bundle 内嵌的 Inter 字体仍指向 `fonts.scalar.com`，离线/内网环境请求不到时会回退系统字体，不影响可用性。
 - **字段无额外约束**：不输出 `minLength`/`format:email`/`example` 等；schema 只表达类型形状。
 - **请求体 DTO 字段会原样暴露**：如 `CreateUserReq` 的 `password` 字段会出现在文档里——这是请求体的正常表达，但请确认 DTO 不含不应公开的字段。
 

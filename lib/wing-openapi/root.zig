@@ -8,11 +8,15 @@
 
 const router = @import("router.zig");
 const meta = @import("meta.zig");
+const serve = @import("serve.zig");
 
 pub const Router = router.Router;
 pub const Meta = meta.Meta;
 pub const ApiInfo = meta.ApiInfo;
 pub const RouteDoc = meta.RouteDoc;
+pub const SecurityScheme = meta.SecurityScheme;
+pub const ApiDocs = serve.ApiDocs;
+pub const docsRoutes = serve.docsRoutes;
 
 test {
     @import("std").testing.refAllDecls(@This());
@@ -21,4 +25,5 @@ test {
     _ = @import("assemble.zig");
     _ = @import("router.zig");
     _ = @import("meta.zig");
+    _ = @import("serve.zig");
 }

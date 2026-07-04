@@ -157,7 +157,7 @@ block updates automatically. See `src/auth/support/auth.zig` for the policy and 
 
 For framework details (extractors, typed responses, state projection, custom middleware, error
 handling), see wing's user guide at `../wing/docs/user-guide.md`. For the OpenAPI generator, see
-`docs/openapi-user-guide.md`.
+`lib/wing-openapi/docs/openapi-user-guide.md`.
 
 ## Dependencies
 

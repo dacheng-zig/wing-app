@@ -6,7 +6,7 @@
 
 const std = @import("std");
 const wing = @import("wing");
-const openapi = @import("../openapi/root.zig");
+const openapi = @import("wing_openapi");
 
 const AppState = @import("../state.zig").AppState;
 const Ctx = @import("../state.zig").Ctx;
@@ -14,7 +14,6 @@ const home = @import("../handlers/home.zig");
 const health = @import("../handlers/health.zig");
 const user_routes = @import("../user/routes/user_routes.zig");
 const auth_routes = @import("../auth/routes/auth_routes.zig");
-const docs_routes = @import("../docs/routes/docs_routes.zig");
 
 fn notFound(ctx: *Ctx) anyerror!void {
     try ctx.respond("not found\n", .{ .status = .not_found });
@@ -47,7 +46,7 @@ pub fn build(gpa: std.mem.Allocator) !Built {
     try ops.get("/health", health.handle, .{ .summary = "Health check", .tags = &.{"ops"} });
 
     // Docs feature: spec endpoint + Scalar page (hidden; root-level → merged).
-    var docs = try docs_routes.build(gpa);
+    var docs = try openapi.docsRoutes(AppState, gpa);
     defer docs.deinit();
 
     var root = openapi.Router(AppState).init(gpa);

@@ -1,6 +1,6 @@
 # wing-app OpenAPI 包：开发者指南
 
-> 受众：维护 / 扩展 `src/openapi/` 的工程师。
+> 受众：维护 / 扩展 `lib/wing-openapi/` 的工程师。
 > 范围：当前**已落地**的架构、技术实现与缺口。以代码为准——本文所有断言已用 `zig build test` / `zig build openapi` 验证。
 > 配套：`openapi-user-guide.md`（集成使用）。
 
@@ -39,13 +39,13 @@ openapi.Router.get(path,h,meta)
 
 | 文件 | 职责 | 依赖 |
 |---|---|---|
-| `src/openapi/root.zig` | barrel：导出 `Router`/`Meta`/`ApiInfo`/`RouteDoc` | — |
-| `src/openapi/router.zig` | `Router(State)`：包装 `wing.Router`，镜像方法 + 记账 + nest/merge 折叠 + `intoRouter` | `wing.Router` |
-| `src/openapi/operation.zig` | comptime：handler 签名 → operation 对象（`paramRole`/`responseOf` 分类） | `wing` 公开 extractor 类型 |
-| `src/openapi/schema.zig` | comptime：Zig type → JSON Schema 2020-12 节点 + `$ref` 去重 | std |
-| `src/openapi/assemble.zig` | 启动期：`[]RouteDoc` → 完整 3.1 文档（路径模板化、operationId、info） | `operation` 产物 + std.json |
-| `src/openapi/meta.zig` | `Meta`/`ApiInfo`/`Contact`/`License`/`RouteDoc`/`BuildFn` 数据结构 | std |
-| `src/docs/` | serve 层：`/openapi.json` + `/docs` 两端点 + `scalar.html` | wing + state |
+| `lib/wing-openapi/root.zig` | barrel：导出 `Router`/`Meta`/`ApiInfo`/`RouteDoc`/`SecurityScheme`/`ApiDocs`/`docsRoutes` | — |
+| `lib/wing-openapi/router.zig` | `Router(State)`：包装 `wing.Router`，镜像方法 + 记账 + nest/merge 折叠 + `intoRouter` | `wing.Router` |
+| `lib/wing-openapi/operation.zig` | comptime：handler 签名 → operation 对象（`paramRole`/`responseOf` 分类） | `wing` 公开 extractor 类型 |
+| `lib/wing-openapi/schema.zig` | comptime：Zig type → JSON Schema 2020-12 节点 + `$ref` 去重 | std |
+| `lib/wing-openapi/assemble.zig` | 启动期：`[]RouteDoc` → 完整 3.1 文档（路径模板化、operationId、info） | `operation` 产物 + std.json |
+| `lib/wing-openapi/meta.zig` | `Meta`/`ApiInfo`/`Contact`/`License`/`RouteDoc`/`BuildFn` 数据结构 | std |
+| `lib/wing-openapi/serve.zig` | serve 层：`ApiDocs` + `docsRoutes(State)`（`/openapi.json` + `/docs` + `/docs/scalar.js` 三端点，`@embedFile` `assets/scalar.html` 与锁定版本的 `assets/scalar-api-reference.js`） | wing |
 | `src/openapi_gen.zig` | 离线导出工具（`zig build openapi`） | routes |
 
 依赖方向单向：`schema`/`operation`/`meta` → `router` → `assemble`；serve 层只消费产物。OpenAPI 知识全部内聚，**不碰 `wing/src/*`**。
@@ -146,7 +146,7 @@ fn paramRole(comptime P: type) Role {
 ### P3 — 范围 / 工程
 
 5. **不支持 oneOf/多态响应、webhooks、callbacks** `[设计 defer]`。
-6. **Scalar 走 CDN**：`scalar.html` 引用 `cdn.jsdelivr.net`，`/docs` 页面**需联网**；离线/内网环境渲染不出。`@embedFile` 本地化是 `[设计 defer]`。
+6. **Scalar 已本地化，但字体仍走 CDN**：`scalar.html` 引用 `/docs/scalar.js`（`@embedFile` 的 `assets/scalar-api-reference.js`，锁定 `@scalar/api-reference@1.62.4`），`/docs` 页面本身无需联网即可加载 UI。但 bundle 内嵌的 `@font-face` 规则仍指向 `fonts.scalar.com`（Inter 字重），渲染时按需请求；若离线/内网环境无法访问该域名，浏览器会回退到系统字体，页面仍可用。彻底离线需另行 vendor 字体文件并重写 `src`，未做 `[设计 defer]`。
 7. **手动镜像样板**：`get/post/put/delete/patch/add/nest/merge/fallback` 需逐个转发（`router.zig:49-112`）；新增 wing 路由方法需同步。集中一处、每个仅几行，可维护。
 8. **enum 仅 string 化**：int-backed enum 也输出为 string enum（字段名），不区分。
 

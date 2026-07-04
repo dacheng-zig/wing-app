@@ -51,6 +51,19 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    // wing-openapi (lib/wing-openapi): code-first OpenAPI 3.1 generation + serve layer
+    // wrapping wing.Router. Same plain-module arrangement as wing-trace (wing
+    // stays the single deduped instance); promote to a path dependency when it
+    // moves to its own repository.
+    const wing_openapi_mod = b.createModule(.{
+        .root_source_file = b.path("lib/wing-openapi/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "wing", .module = wing_mod },
+        },
+    });
+
     const exe = b.addExecutable(.{
         .name = "wing_app",
         .root_module = b.createModule(.{
@@ -64,6 +77,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "mantle", .module = mantle_mod },
                 .{ .name = "wing_trace", .module = wing_trace_mod },
                 .{ .name = "uuid", .module = uuid_mod },
+                .{ .name = "wing_openapi", .module = wing_openapi_mod },
             },
         }),
     });
@@ -89,6 +103,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "mantle", .module = mantle_mod },
                 .{ .name = "wing_trace", .module = wing_trace_mod },
                 .{ .name = "uuid", .module = uuid_mod },
+                .{ .name = "wing_openapi", .module = wing_openapi_mod },
             },
         }),
     });
@@ -96,9 +111,7 @@ pub fn build(b: *std.Build) void {
     const openapi_step = b.step("openapi", "Print the assembled OpenAPI 3.1 spec to stdout");
     openapi_step.dependOn(&openapi_run.step);
 
-    // Unit tests: the dependency-free auth units plus the openapi package
-    // (see src/tests.zig). The openapi units reflect over wing's public
-    // extractor types, so the test module imports `wing`.
+    // Unit tests: the dependency-free auth units (see src/tests.zig).
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/tests.zig"),
@@ -107,6 +120,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "wing", .module = wing_mod },
                 .{ .name = "uuid", .module = uuid_mod },
+                .{ .name = "wing_openapi", .module = wing_openapi_mod },
             },
         }),
     });
@@ -114,9 +128,12 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_tests.step);
 
-    // wing-trace's tests need their own compile: test collection stops at
-    // module boundaries, so importing the module from tests.zig would not
-    // pick them up.
+    // lib modules' tests need their own compiles: test collection stops at
+    // module boundaries, so importing them from tests.zig would not pick
+    // them up.
     const trace_tests = b.addTest(.{ .root_module = wing_trace_mod });
     test_step.dependOn(&b.addRunArtifact(trace_tests).step);
+
+    const openapi_tests = b.addTest(.{ .root_module = wing_openapi_mod });
+    test_step.dependOn(&b.addRunArtifact(openapi_tests).step);
 }

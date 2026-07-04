@@ -6,7 +6,7 @@
 //! giant table. One file per endpoint under `../handlers`, mapped 1:1 below.
 
 const std = @import("std");
-const openapi = @import("../../openapi/root.zig");
+const openapi = @import("wing_openapi");
 
 const AppState = @import("../../state.zig").AppState;
 const index = @import("../handlers/index.zig");

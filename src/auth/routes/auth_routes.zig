@@ -7,7 +7,7 @@
 //! request/response shape. One file per endpoint under `../handlers`.
 
 const std = @import("std");
-const openapi = @import("../../openapi/root.zig");
+const openapi = @import("wing_openapi");
 
 const AppState = @import("../../state.zig").AppState;
 const me = @import("../handlers/me.zig");

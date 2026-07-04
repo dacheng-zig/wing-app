@@ -5,7 +5,6 @@
 - [-] openapi doc
   - 错误响应 schema（待 validator RFC 9457）
   - 多状态码/oneOf/webhooks
-  - Scalar 离线化
 - strong and generic ID type for global use: primary / foreign key (可解决id错误赋值引发的bug：如把 user id 赋值给 order id)
 - [ ] form validation / validators component
 - wing-app 版本升级，用户 clone 后进行业务开发后，如何安全得获取上游更新

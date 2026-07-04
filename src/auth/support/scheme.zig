@@ -25,7 +25,7 @@
 const std = @import("std");
 const Principal = @import("../models/principal.zig").Principal;
 const Id = @import("../../db/id.zig").Id;
-const SecurityScheme = @import("../../openapi/meta.zig").SecurityScheme;
+const SecurityScheme = @import("wing_openapi").SecurityScheme;
 
 /// Token-class scheme = a Locator × a resolver field. `doc` is this scheme's
 /// OpenAPI `SecurityScheme`, declared beside the runtime binding so the two stay
