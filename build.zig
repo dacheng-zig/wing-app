@@ -98,6 +98,11 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            // Strip local symbols/debug info in release builds (keep them in
+            // Debug for backtraces). Default `strip = null` only strips under
+            // ReleaseSmall, so ReleaseFast/ReleaseSafe would otherwise ship
+            // an unstripped symbol table for no runtime benefit.
+            .strip = optimize != .Debug,
             .imports = &.{
                 .{ .name = "wing", .module = wing_mod },
                 .{ .name = "talon", .module = talon_mod },
@@ -126,6 +131,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/openapi_gen.zig"),
             .target = target,
             .optimize = optimize,
+            .strip = optimize != .Debug,
             .imports = &.{
                 .{ .name = "wing", .module = wing_mod },
                 .{ .name = "talon", .module = talon_mod },

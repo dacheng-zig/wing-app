@@ -161,7 +161,7 @@ zig build run                        # 启动后浏览器开 http://<host>:<port
 - **登录要求会自动体现**：handler 声明 `Auth`/`OptionalAuth`/`Require(...)` 的接口（如 `/api/v1/auth/me`）会自动带 `security`，Scalar 上显示锁图标——无需手写。但 **`RequireRole("admin")` 的具体角色暂不进 spec**（只体现"需登录"），角色要求请在 `description` 里说明（P2 再自动化）。
 - **只有成功响应**：每个接口只展示 200/201/302，**不含**错误响应（401/404/422 等）。
 - **schema 名较长**：components 用全限定类型名（如 `user.models.user.User`），UI 里偏冗长，暂不可自定义。
-- **`/docs` 已本地化，字体除外**：Scalar UI 脚本已 vendor 到 `assets/scalar-api-reference.js`（锁定 `@scalar/api-reference@1.62.4`），经 `/docs/scalar.js` 提供，页面本身无需联网。bundle 内嵌的 Inter 字体仍指向 `fonts.scalar.com`，离线/内网环境请求不到时会回退系统字体，不影响可用性。
+- **`/docs` 已本地化，字体除外**：Scalar UI 脚本已 vendor 到 `assets/scalar-api-reference.js.gz`（锁定 `@scalar/api-reference@1.62.4`，gzip -9 预压缩），经 `/docs/scalar.js` 提供（`Content-Encoding: gzip`），页面本身无需联网。bundle 内嵌的 Inter 字体仍指向 `fonts.scalar.com`，离线/内网环境请求不到时会回退系统字体，不影响可用性。
 - **字段无额外约束**：不输出 `minLength`/`format:email`/`example` 等；schema 只表达类型形状。
 - **请求体 DTO 字段会原样暴露**：如 `CreateUserReq` 的 `password` 字段会出现在文档里——这是请求体的正常表达，但请确认 DTO 不含不应公开的字段。
 
