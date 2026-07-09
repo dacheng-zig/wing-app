@@ -14,6 +14,6 @@ const Id = @import("wing_id").Id;
 
 pub const Params = struct { id: Id };
 
-pub fn handle(ctx: *Ctx, svc: *UserService, path: wing.Path(Params)) anyerror!wing.Json(User) {
+pub fn handle(ctx: *Ctx, svc: *UserService, path: wing.extract.Path(Params)) anyerror!wing.respond.Json(User) {
     return .{ .value = try svc.get(ctx.arena, path.value.id) };
 }

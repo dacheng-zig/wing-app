@@ -2,8 +2,8 @@
 //!
 //! The two comptime classifiers:
 //!   - `paramRole`: type-identity match against wing's public extractor
-//!     constructors. `wing.Path(T)` evaluated twice is the *same* type
-//!     (Zig memoizes generic instantiation), so `P == wing.Path(T)`
+//!     constructors. `wing.extract.Path(T)` evaluated twice is the *same* type
+//!     (Zig memoizes generic instantiation), so `P == wing.extract.Path(T)`
 //!     unambiguously means "path params" without touching wing internals.
 //!     A param whose type declares `pub const auth_requirement` (a plain comptime
 //!     literal, read structurally — see `paramRole`/`authOptional`) is an
@@ -50,9 +50,9 @@ fn paramRole(comptime P: type) Role {
     // Other extractors with no `value` field (e.g. bare DI structs) are skipped.
     if (@typeInfo(P) != .@"struct" or !@hasField(P, "value")) return .skip;
     const T = @FieldType(P, "value");
-    if (P == wing.Path(T)) return .{ .path = T };
-    if (P == wing.Query(T)) return .{ .query = T };
-    if (P == wing.Json(T)) return .{ .body = T };
+    if (P == wing.extract.Path(T)) return .{ .path = T };
+    if (P == wing.extract.Query(T)) return .{ .query = T };
+    if (P == wing.extract.Json(T)) return .{ .body = T };
     return .skip;
 }
 
@@ -61,11 +61,11 @@ const Response = struct { status: u16, body: ?type };
 fn responseOf(comptime Ret: type) Response {
     const P = if (@typeInfo(Ret) == .error_union) @typeInfo(Ret).error_union.payload else Ret;
     if (P == void or P == []const u8 or P == []u8) return .{ .status = 200, .body = null };
-    if (P == wing.Redirect) return .{ .status = 302, .body = null };
+    if (P == wing.respond.Redirect) return .{ .status = 302, .body = null };
     if (@typeInfo(P) == .@"struct" and @hasField(P, "value")) {
         const T = @FieldType(P, "value");
-        if (P == wing.Json(T)) return .{ .status = 200, .body = T };
-        if (P == wing.Created(T)) return .{ .status = 201, .body = T };
+        if (P == wing.respond.Json(T)) return .{ .status = 200, .body = T };
+        if (P == wing.respond.Created(T)) return .{ .status = 201, .body = T };
     }
     return .{ .status = 200, .body = null };
 }
@@ -231,13 +231,13 @@ test "identity: wing extractor constructors are memoized" {
     // type. If wing ever breaks this, these asserts turn red instead of the
     // generator silently emitting wrong docs.
     const Q = struct { page: u32 };
-    try testing.expect(wing.Path(u64) == wing.Path(u64));
-    try testing.expect(wing.Query(Q) == wing.Query(Q));
-    try testing.expect(wing.Json(u8) == wing.Json(u8));
+    try testing.expect(wing.extract.Path(u64) == wing.extract.Path(u64));
+    try testing.expect(wing.extract.Query(Q) == wing.extract.Query(Q));
+    try testing.expect(wing.extract.Json(u8) == wing.extract.Json(u8));
     // Distinct payloads are distinct types.
-    try testing.expect(wing.Path(u64) != wing.Path(u32));
+    try testing.expect(wing.extract.Path(u64) != wing.extract.Path(u32));
     // Path and Query are structurally identical but identity-distinct.
-    try testing.expect(wing.Path(u64) != wing.Query(u64));
+    try testing.expect(wing.extract.Path(u64) != wing.extract.Query(u64));
     // Identity holds because the SAME handler type flows from the registration
     // call into both wing's bind and our classifier — never two separately
     // written anonymous structs (which Zig would treat as distinct types).
@@ -248,18 +248,18 @@ test "paramRole classifies extractors, skips DI/auth params" {
     const AuthLike = struct { principal: u32 };
     try testing.expectEqual(Role.skip, paramRole(*State));
     try testing.expectEqual(Role.skip, paramRole(AuthLike));
-    try testing.expect(paramRole(wing.Path(struct { id: u64 })) == .path);
-    try testing.expect(paramRole(wing.Query(struct { q: []const u8 })) == .query);
-    try testing.expect(paramRole(wing.Json(struct { n: u8 })) == .body);
+    try testing.expect(paramRole(wing.extract.Path(struct { id: u64 })) == .path);
+    try testing.expect(paramRole(wing.extract.Query(struct { q: []const u8 })) == .query);
+    try testing.expect(paramRole(wing.extract.Json(struct { n: u8 })) == .body);
 }
 
 test "responseOf maps return types to status + body" {
     try testing.expectEqual(@as(u16, 200), responseOf(anyerror!void).status);
     try testing.expectEqual(@as(u16, 200), responseOf(anyerror![]const u8).status);
-    try testing.expectEqual(@as(u16, 201), responseOf(anyerror!wing.Created(u8)).status);
-    try testing.expectEqual(@as(u16, 200), responseOf(anyerror!wing.Json(u8)).status);
-    try testing.expectEqual(@as(u16, 302), responseOf(anyerror!wing.Redirect).status);
-    try testing.expect(responseOf(anyerror!wing.Json(u8)).body != null);
+    try testing.expectEqual(@as(u16, 201), responseOf(anyerror!wing.respond.Created(u8)).status);
+    try testing.expectEqual(@as(u16, 200), responseOf(anyerror!wing.respond.Json(u8)).status);
+    try testing.expectEqual(@as(u16, 302), responseOf(anyerror!wing.respond.Redirect).status);
+    try testing.expect(responseOf(anyerror!wing.respond.Json(u8)).body != null);
     try testing.expect(responseOf(anyerror!void).body == null);
 }
 
@@ -267,7 +267,7 @@ test "operationValue derives params, body, and response from a handler" {
     const Ctx = wing.Context(struct { x: u32 });
     const Dto = struct { name: []const u8 };
     const Handler = struct {
-        fn h(ctx: *Ctx, body: wing.Json(Dto), path: wing.Path(struct { id: u64 })) anyerror!wing.Created(Dto) {
+        fn h(ctx: *Ctx, body: wing.extract.Json(Dto), path: wing.extract.Path(struct { id: u64 })) anyerror!wing.respond.Created(Dto) {
             _ = ctx;
             _ = body;
             _ = path;

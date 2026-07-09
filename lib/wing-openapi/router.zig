@@ -147,7 +147,7 @@ test "router: nest folds the prefix into documented paths" {
         fn index(ctx: *Ctx) anyerror!void {
             _ = ctx;
         }
-        fn show(ctx: *Ctx, path: wing.Path(struct { id: u64 })) anyerror!void {
+        fn show(ctx: *Ctx, path: wing.extract.Path(struct { id: u64 })) anyerror!void {
             _ = ctx;
             _ = path;
         }

@@ -9,6 +9,6 @@ const Ctx = @import("../../state.zig").Ctx;
 const UserService = @import("../services/user_service.zig").UserService;
 const User = @import("../models/user.zig").User;
 
-pub fn handle(ctx: *Ctx, svc: *UserService) anyerror!wing.Json([]User) {
+pub fn handle(ctx: *Ctx, svc: *UserService) anyerror!wing.respond.Json([]User) {
     return .{ .value = try svc.list(ctx.arena) };
 }

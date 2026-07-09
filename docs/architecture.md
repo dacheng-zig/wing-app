@@ -77,10 +77,10 @@ pub const AppState = struct {
 ```
 HTTP 请求
   → 中间件链（logger → recover → request_id → security_headers → route_match → cors）
-  → controller（wing.Path/Query/Json 提取 → 调 service）
+  → controller（wing.extract.Path/Query/Json 提取 → 调 service）
   → service（业务规则，如校验非空 → 调 repository）
   → repository（数据访问，返回 model）
-  → controller 返回 typed response（wing.Json / Created / …）
+  → controller 返回 typed response（wing.respond.Json / Created / …）
   → 框架 comptime 转换为 HTTP 响应
 ```
 

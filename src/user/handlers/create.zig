@@ -21,7 +21,7 @@ pub const Request = struct {
     password: []const u8,
 };
 
-pub fn handle(ctx: *Ctx, svc: *UserService, db: *Database, body: wing.Json(Request)) anyerror!wing.Created(User) {
+pub fn handle(ctx: *Ctx, svc: *UserService, db: *Database, body: wing.extract.Json(Request)) anyerror!wing.respond.Created(User) {
     const user = try svc.register(ctx.arena, body.value.name, body.value.username, body.value.password);
     const id_text = user.id.toText();
 

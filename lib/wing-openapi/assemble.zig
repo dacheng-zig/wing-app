@@ -189,11 +189,11 @@ test "assemble: groups operations under paths, dedups components, skips hidden" 
     const Ctx = wing.Context(struct { x: u32 });
     const User = struct { id: u64 };
     const Handlers = struct {
-        fn list(ctx: *Ctx) anyerror!wing.Json([]User) {
+        fn list(ctx: *Ctx) anyerror!wing.respond.Json([]User) {
             _ = ctx;
             return undefined;
         }
-        fn show(ctx: *Ctx, path: wing.Path(struct { id: u64 })) anyerror!wing.Json(User) {
+        fn show(ctx: *Ctx, path: wing.extract.Path(struct { id: u64 })) anyerror!wing.respond.Json(User) {
             _ = ctx;
             _ = path;
             return undefined;

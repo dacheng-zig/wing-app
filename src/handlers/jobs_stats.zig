@@ -29,7 +29,7 @@ pub const Response = struct {
     schedules: []const ScheduleInfo,
 };
 
-pub fn handle(ctx: *Ctx, db: *Database) anyerror!wing.Json(Response) {
+pub fn handle(ctx: *Ctx, db: *Database) anyerror!wing.respond.Json(Response) {
     // Long-lived gpa, NOT ctx.arena: query scratch ends up in the
     // connection's statement cache, which outlives this request.
     var repo = jobs.Repository.init(db.gpa, db.pool);

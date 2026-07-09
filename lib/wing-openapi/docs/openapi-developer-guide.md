@@ -56,16 +56,16 @@ openapi.Router.get(path,h,meta)
 
 ### 3.1 类型 identity 分类（为何无需改 wing）
 
-wing 的 `Path(T)`/`Query(T)`/`Json(T)` 结构相同（都 `value: T`），duck typing 无法区分。但 **Zig 对泛型实例化做记忆化**——`wing.Path(u64)` 求值两次得同一类型。于是用 identity 校验直接判定（`operation.zig:33-43`）：
+wing 的 `extract.Path(T)`/`extract.Query(T)`/`extract.Json(T)` 结构相同（都 `value: T`），duck typing 无法区分。但 **Zig 对泛型实例化做记忆化**——`wing.extract.Path(u64)` 求值两次得同一类型。于是用 identity 校验直接判定（`operation.zig:44-57`）：
 
 ```zig
 fn paramRole(comptime P: type) Role {
     if (@typeInfo(P) == .pointer) return .skip;              // *State / *Service：DI 注入
     if (@typeInfo(P) != .@"struct" or !@hasField(P, "value")) return .skip; // auth 等
     const T = @FieldType(P, "value");
-    if (P == wing.Path(T)) return .{ .path = T };            // identity 命中
-    if (P == wing.Query(T)) return .{ .query = T };
-    if (P == wing.Json(T)) return .{ .body = T };
+    if (P == wing.extract.Path(T)) return .{ .path = T };    // identity 命中
+    if (P == wing.extract.Query(T)) return .{ .query = T };
+    if (P == wing.extract.Json(T)) return .{ .body = T };
     return .skip;
 }
 ```

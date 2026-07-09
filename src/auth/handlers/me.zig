@@ -18,7 +18,7 @@ pub const Response = struct {
     roles: []const []const u8,
 };
 
-pub fn handle(ctx: *Ctx, auth: Auth) anyerror!wing.Json(Response) {
+pub fn handle(ctx: *Ctx, auth: Auth) anyerror!wing.respond.Json(Response) {
     const user = try ctx.state.users.get(ctx.arena, auth.principal.id);
     return .{ .value = .{
         .id = user.id,

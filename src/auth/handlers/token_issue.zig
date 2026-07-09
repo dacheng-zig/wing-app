@@ -20,7 +20,7 @@ pub const Response = struct {
     token: []const u8,
 };
 
-pub fn handle(ctx: *Ctx, body: wing.Json(Request)) anyerror!wing.Json(Response) {
+pub fn handle(ctx: *Ctx, body: wing.extract.Json(Request)) anyerror!wing.respond.Json(Response) {
     const uid = try ctx.state.auth.login(ctx.arena, body.value.username, body.value.password);
     const secret = try ctx.state.credentials.issue(ctx.arena, uid, credential_ttl);
     return .{ .value = .{ .token = secret } };

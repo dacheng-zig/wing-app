@@ -4,7 +4,7 @@
 //! returns `null` when this channel carries no credential (absent/empty) and the
 //! raw credential string otherwise. Locators do no IO and no identity
 //! resolution — that is axis B (the resolver, see credential.zig). They are pure
-//! slices except the query channel, which delegates decoding to `wing.Query`
+//! slices except the query channel, which delegates decoding to `wing.extract.Query`
 //! (its percent/`+` decode lands in `ctx.arena`).
 //!
 //! Channel exposure differs (see the design §10): cookie (`HttpOnly`+`Secure`+
@@ -35,7 +35,7 @@ pub const Bearer = struct {
     }
 };
 
-/// Query channel: reuse `wing.Query` to parse the query string and read the
+/// Query channel: reuse `wing.extract.Query` to parse the query string and read the
 /// parameter named `name`. The single-field struct declares `?[]const u8`, so a
 /// missing parameter parses to `null` rather than erroring; any parse failure
 /// (e.g. OOM) degrades to "no credential" (`null`) — there is no real IO here,
@@ -47,7 +47,7 @@ pub fn Query(comptime name: []const u8) type {
         // parameter_name). `@Struct` is the Zig 0.16 replacement for `@Type`.
         const Q = @Struct(.auto, null, &.{name}, &.{?[]const u8}, &.{.{}});
         pub fn locate(ctx: anytype) ?[]const u8 {
-            const parsed = wing.Query(Q).fromRequestParts(ctx) catch return null;
+            const parsed = wing.extract.Query(Q).fromRequestParts(ctx) catch return null;
             const v = @field(parsed.value, name) orelse return null;
             return if (v.len == 0) null else v;
         }
