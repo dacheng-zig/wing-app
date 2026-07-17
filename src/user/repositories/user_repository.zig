@@ -20,11 +20,11 @@ const User = @import("../models/user.zig").User;
 const Id = @import("wing_id").Id;
 
 const sql = struct {
-    const insert = "INSERT INTO users (id, name, username, password_hash) VALUES (?, ?, ?, ?)";
-    const find_by_username = "SELECT id, password_hash FROM users WHERE username = ?";
-    const update_password_hash = "UPDATE users SET password_hash = ? WHERE id = ?";
-    const select_by_id = "SELECT id, name FROM users WHERE id = ?";
-    const select_all = "SELECT id, name FROM users ORDER BY id";
+    const insert = "INSERT INTO users (user_id, name, username, password_hash) VALUES (?, ?, ?, ?)";
+    const find_by_username = "SELECT user_id, password_hash FROM users WHERE username = ?";
+    const update_password_hash = "UPDATE users SET password_hash = ? WHERE user_id = ?";
+    const select_by_id = "SELECT user_id, name FROM users WHERE user_id = ?";
+    const select_all = "SELECT user_id, name FROM users ORDER BY user_id";
 };
 
 /// MySQL ER_DUP_ENTRY — a UNIQUE constraint (here, `users.username`) was
@@ -33,17 +33,17 @@ const sql = struct {
 const er_dup_entry = 1062;
 
 /// Row shape for SELECTs. Field order/names map to the projected columns;
-/// mantle scans binary rows into this struct (the CHAR(36) id decodes via
+/// mantle scans binary rows into this struct (the CHAR(36) user_id decodes via
 /// `Id.fromMantleText`).
 const UserRow = struct {
-    id: Id,
+    user_id: Id,
     name: []const u8,
 };
 
 /// Row shape for the credential lookup (login). Carries only what auth needs:
 /// the id to bind a session to, and the stored hash to verify against.
 const CredentialRow = struct {
-    id: Id,
+    user_id: Id,
     password_hash: []const u8,
 };
 
@@ -106,7 +106,7 @@ pub const UserRepository = struct {
 
         if (table.rows.len == 0) return null;
         const row = table.rows[0];
-        return .{ .id = row.id, .password_hash = try arena.dupe(u8, row.password_hash) };
+        return .{ .id = row.user_id, .password_hash = try arena.dupe(u8, row.password_hash) };
     }
 
     /// Replace a user's stored password hash. Used for rehash-on-login: when a
@@ -136,7 +136,7 @@ pub const UserRepository = struct {
 
         if (table.rows.len == 0) return null;
         const row = table.rows[0];
-        return .{ .id = row.id, .name = try arena.dupe(u8, row.name) };
+        return .{ .id = row.user_id, .name = try arena.dupe(u8, row.name) };
     }
 
     /// Snapshot all users into `arena` (ids and duplicated names), so the slice
@@ -150,7 +150,7 @@ pub const UserRepository = struct {
 
         const out = try arena.alloc(User, table.rows.len);
         for (table.rows, out) |row, *dst| {
-            dst.* = .{ .id = row.id, .name = try arena.dupe(u8, row.name) };
+            dst.* = .{ .id = row.user_id, .name = try arena.dupe(u8, row.name) };
         }
         return out;
     }

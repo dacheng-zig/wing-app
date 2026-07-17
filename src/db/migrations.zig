@@ -7,9 +7,9 @@
 //! runs each via `execSimple` at startup. The target database must already
 //! exist (the app manages tables, not the database).
 //!
-//! These statements provision a fresh schema; they do not migrate an older
-//! `users` table that predates the auth columns. A pre-existing dev database
-//! must be dropped/recreated (the app is still pre-release).
+//! These statements provision a fresh schema; they do not alter existing
+//! tables. After a schema change, a pre-existing dev database must be
+//! dropped/recreated (the app is still pre-release).
 //!
 //! Migrations stay centralized here rather than per-module because they are a
 //! single ordered set applied by one startup runner, spanning the users, roles,

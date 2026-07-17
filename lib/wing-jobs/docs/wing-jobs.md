@@ -123,7 +123,7 @@ pub const schedules = [_]jobs.Schedule{
 
 | 列 | 说明 |
 |---|---|
-| `id` CHAR(36) | 应用生成的 UUIDv7（与全库主键约定一致） |
+| `job_id` CHAR(36) | 应用生成的 UUIDv7（与全库主键约定一致） |
 | `kind` / `queue` / `priority` | 任务类型名 / 队列标签 / 优先级（小者先） |
 | `state` ENUM | 六态：`available / running / retryable / completed / cancelled / discarded` |
 | `args` JSON | 载荷 |
@@ -134,7 +134,7 @@ pub const schedules = [_]jobs.Schedule{
 | `attempted_at` / `attempted_by` | 本次认领时刻 / 认领节点（启动时生成的随机 id `node-<16位hex>`，崩溃归因用） |
 | `finalized_at` | 进入终态时刻，清理依据 |
 
-三个复合索引各管一条路径：`(state, queue, priority, scheduled_at, id)` 管认领，`(state, attempted_at)` 管救援扫描，`(state, finalized_at)` 管清理；`unique_key` 上有唯一索引。
+三个复合索引各管一条路径：`(state, queue, priority, scheduled_at, job_id)` 管认领，`(state, attempted_at)` 管救援扫描，`(state, finalized_at)` 管清理；`unique_key` 上有唯一索引。
 
 **`wing_schedules`**（每个定时声明一行，只存最小运行状态）：`schedule_key`（代码里声明的 key）、`next_run_at`（预计算的下次触发）、`last_run_at`。cron 表达式本身**不落库**——定义在代码里，部署即真相；表里只有"下次几点跑"这个必须持久化的状态。启动时代码声明自动补齐缺行；表里有、代码里已删的 key 只告警不删，让漂移可见。
 

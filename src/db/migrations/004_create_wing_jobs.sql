@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS wing_jobs (
-  id            CHAR(36) PRIMARY KEY,
+  job_id        CHAR(36) PRIMARY KEY,
   kind          VARCHAR(128)      NOT NULL,
   queue         VARCHAR(64)       NOT NULL DEFAULT 'default',
   state         ENUM('available','running','retryable',
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS wing_jobs (
   finalized_at  DATETIME(3)       NULL,
   created_at    DATETIME(3)       NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
 
-  KEY idx_fetch  (state, queue, priority, scheduled_at, id),
+  KEY idx_fetch  (state, queue, priority, scheduled_at, job_id),
   KEY idx_rescue (state, attempted_at),
   KEY idx_prune  (state, finalized_at),
   UNIQUE KEY uq_wing_jobs_unique_key (unique_key)

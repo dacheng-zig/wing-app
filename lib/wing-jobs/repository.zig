@@ -25,19 +25,19 @@ const sql = struct {
     // in mantle's integration suite), so this is now purely a statement-cache
     // choice.
     const insert_delay =
-        \\INSERT INTO wing_jobs (id, kind, queue, priority, args, max_attempts, scheduled_at)
+        \\INSERT INTO wing_jobs (job_id, kind, queue, priority, args, max_attempts, scheduled_at)
         \\VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? MICROSECOND))
     ;
     const insert_at =
-        \\INSERT INTO wing_jobs (id, kind, queue, priority, args, max_attempts, scheduled_at)
+        \\INSERT INTO wing_jobs (job_id, kind, queue, priority, args, max_attempts, scheduled_at)
         \\VALUES (?, ?, ?, ?, ?, ?, ?)
     ;
     const insert_unique_delay =
-        \\INSERT INTO wing_jobs (id, kind, queue, priority, args, max_attempts, unique_key, unique_keep, scheduled_at)
+        \\INSERT INTO wing_jobs (job_id, kind, queue, priority, args, max_attempts, unique_key, unique_keep, scheduled_at)
         \\VALUES (?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? MICROSECOND))
     ;
     const insert_unique_at =
-        \\INSERT INTO wing_jobs (id, kind, queue, priority, args, max_attempts, unique_key, unique_keep, scheduled_at)
+        \\INSERT INTO wing_jobs (job_id, kind, queue, priority, args, max_attempts, unique_key, unique_keep, scheduled_at)
         \\VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ;
     // Lock-free probe so an idle producer poll costs one statement instead
@@ -50,9 +50,9 @@ const sql = struct {
     // Lock only due rows, skipping ones other workers hold; the lock lives
     // for two statements, never for the job's execution.
     const claim_select =
-        \\SELECT id, kind, args, attempt, max_attempts FROM wing_jobs
+        \\SELECT job_id, kind, args, attempt, max_attempts FROM wing_jobs
         \\WHERE state IN ('available','retryable') AND scheduled_at <= UTC_TIMESTAMP(3)
-        \\ORDER BY priority, scheduled_at, id
+        \\ORDER BY priority, scheduled_at, job_id
         \\LIMIT ?
         \\FOR UPDATE SKIP LOCKED
     ;
@@ -62,33 +62,33 @@ const sql = struct {
     const complete =
         \\UPDATE wing_jobs SET state='completed', finalized_at=UTC_TIMESTAMP(3),
         \\  unique_key=IF(unique_keep, unique_key, NULL)
-        \\WHERE id=? AND state='running'
+        \\WHERE job_id=? AND state='running'
     ;
     const snooze =
         \\UPDATE wing_jobs SET state='available',
         \\  scheduled_at=DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? MICROSECOND),
         \\  attempt=attempt-1
-        \\WHERE id=? AND state='running'
+        \\WHERE job_id=? AND state='running'
     ;
     const retry =
         \\UPDATE wing_jobs SET state='retryable',
         \\  scheduled_at=DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND),
         \\  errors=JSON_ARRAY_APPEND(COALESCE(errors, JSON_ARRAY()), '$',
         \\    JSON_OBJECT('attempt', ?, 'at', CAST(UTC_TIMESTAMP(3) AS CHAR), 'error', ?))
-        \\WHERE id=? AND state='running'
+        \\WHERE job_id=? AND state='running'
     ;
     const dead =
         \\UPDATE wing_jobs SET state=?, finalized_at=UTC_TIMESTAMP(3),
         \\  unique_key=IF(unique_keep, unique_key, NULL),
         \\  errors=JSON_ARRAY_APPEND(COALESCE(errors, JSON_ARRAY()), '$',
         \\    JSON_OBJECT('attempt', ?, 'at', CAST(UTC_TIMESTAMP(3) AS CHAR), 'error', ?))
-        \\WHERE id=? AND state='running'
+        \\WHERE job_id=? AND state='running'
     ;
     // Write the job back untouched except for state, e.g. on graceful
     // shutdown: the interruption consumed an attempt, the row is immediately
     // claimable again.
     const release_back =
-        \\UPDATE wing_jobs SET state='available' WHERE id=? AND state='running'
+        \\UPDATE wing_jobs SET state='available' WHERE job_id=? AND state='running'
     ;
     const rescue =
         \\UPDATE wing_jobs SET
@@ -102,7 +102,7 @@ const sql = struct {
     const cancel_pending =
         \\UPDATE wing_jobs SET state='cancelled', finalized_at=UTC_TIMESTAMP(3),
         \\  unique_key=IF(unique_keep, unique_key, NULL)
-        \\WHERE id=? AND state IN ('available','retryable')
+        \\WHERE job_id=? AND state IN ('available','retryable')
     ;
     const ensure_schedule =
         \\INSERT IGNORE INTO wing_schedules (schedule_id, schedule_key, next_run_at) VALUES (?, ?, ?)
@@ -214,7 +214,7 @@ pub const Repository = struct {
     /// per-batch-size variants).
     pub fn claim(self: *Repository, limit: u64, attempted_by: []const u8) ![]model.ClaimedJob {
         const ClaimRow = struct {
-            id: Id,
+            job_id: Id,
             kind: []const u8,
             args: []const u8,
             attempt: u16,
@@ -246,14 +246,14 @@ pub const Repository = struct {
         defer update.deinit();
         try update.writer.print(
             "UPDATE wing_jobs SET state='running', attempt=attempt+1, " ++
-                "attempted_at=UTC_TIMESTAMP(3), attempted_by='{s}' WHERE id IN (",
+                "attempted_at=UTC_TIMESTAMP(3), attempted_by='{s}' WHERE job_id IN (",
             .{attempted_by},
         );
         for (table.rows, 0..) |row, i| {
             // Safe to splice into statement text: the value round-tripped
             // through Id during the scan, so only hex and hyphens can appear
             // — no quoting hazard.
-            try update.writer.print("{s}'{s}'", .{ if (i == 0) "" else ",", &row.id.toText() });
+            try update.writer.print("{s}'{s}'", .{ if (i == 0) "" else ",", &row.job_id.toText() });
         }
         try update.writer.writeByte(')');
         try tx.conn.execSimple(self.gpa, update.written());
@@ -267,7 +267,7 @@ pub const Repository = struct {
         }
         for (table.rows) |row| {
             out[filled] = .{
-                .id = row.id,
+                .id = row.job_id,
                 .kind = try self.gpa.dupe(u8, row.kind),
                 .args = try self.gpa.dupe(u8, row.args),
                 .attempt = row.attempt + 1,
