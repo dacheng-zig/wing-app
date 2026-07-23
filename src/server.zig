@@ -15,15 +15,6 @@ const App = @import("app.zig").App;
 const routes = @import("routes/routes.zig");
 const job_registry = @import("jobs/registry.zig");
 
-/// Watch for SIGINT and trigger a graceful server drain.
-fn signalWatcher(server: *talon.http.Server(App)) !void {
-    var sig = try zio.Signal.init(.interrupt);
-    defer sig.deinit();
-    try sig.wait();
-    std.log.info("SIGINT received, draining...", .{});
-    server.shutdown();
-}
-
 pub fn run(init: std.process.Init) !void {
     const gpa = init.gpa;
 
@@ -79,12 +70,21 @@ pub fn run(init: std.process.Init) !void {
     });
     defer server.deinit();
 
+    // Setup signal watcher for Ctrl+C
     var group: zio.Group = .init;
     defer group.cancel();
     try group.spawn(signalWatcher, .{&server});
     if (job_runner) |*r| try group.spawn(job_registry.JobRunner.run, .{r});
 
-    std.log.info("wing-app listening on http://{f} (Ctrl+C to stop)", .{addr});
+    std.log.info("listening on http://{f} (Ctrl+C to stop)", .{addr});
     try server.serve(&listener);
-    std.log.info("bye", .{});
+}
+
+/// Watch for SIGINT and trigger a graceful server drain.
+fn signalWatcher(server: *talon.http.Server(App)) !void {
+    var sig = try zio.Signal.init(.interrupt);
+    defer sig.deinit();
+    try sig.wait();
+    std.log.info("SIGINT received, darining...", .{});
+    server.shutdown();
 }
